@@ -118,7 +118,8 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'DiscordBot (https://github.com/itsnikotina/DodoScreenShare, 1.0.0)'
       },
       body: new URLSearchParams({
         client_id: DISCORD_CLIENT_ID,
@@ -135,7 +136,7 @@ app.get('/api/auth/discord/callback', async (req, res) => {
       tokenData = JSON.parse(tokenText);
     } catch (e) {
       console.error('[Discord OAuth] Resposta não-JSON recebida da API do Discord:', tokenText);
-      return res.redirect('/?auth_error=redirect_uri_nao_cadastrada_no_discord_developer_portal');
+      return res.redirect('/?auth_error=erro_comunicacao_discord_api');
     }
 
     if (!tokenResponse.ok || !tokenData.access_token) {
@@ -146,7 +147,8 @@ app.get('/api/auth/discord/callback', async (req, res) => {
 
     const userResponse = await fetch('https://discord.com/api/users/@me', {
       headers: {
-        Authorization: `Bearer ${tokenData.access_token}`
+        Authorization: `Bearer ${tokenData.access_token}`,
+        'User-Agent': 'DiscordBot (https://github.com/itsnikotina/DodoScreenShare, 1.0.0)'
       }
     });
 
