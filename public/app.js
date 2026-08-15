@@ -2057,6 +2057,21 @@ if (dom.btnCopyStreamUrl && dom.streamUrlInput) {
   });
 }
 
+// Detecção de Modo PiP / Mini-Player (segundo plano do Discord)
+function checkPipMode() {
+  const isMini = window.innerWidth <= 440 || window.innerHeight <= 300;
+  if (isMini) {
+    document.body.classList.add('pip-mini-mode');
+  } else {
+    document.body.classList.remove('pip-mini-mode');
+  }
+}
+
+window.addEventListener('resize', checkPipMode);
+window.addEventListener('orientationchange', checkPipMode);
+document.addEventListener('DOMContentLoaded', checkPipMode);
+checkPipMode();
+
 // Inicialização
 detectVoiceChannelRoom();
 initDiscordAuth();

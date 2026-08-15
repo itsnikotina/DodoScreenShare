@@ -1209,3 +1209,121 @@ body.no-scroll {
   font-size: 0.7rem;
   color: var(--text-muted);
 }
+
+/* ----------------- Modo Mini-Player / PiP Discord (Janela Pequena no Canto) ----------------- */
+@media (max-width: 440px), (max-height: 300px) {
+  .app-header,
+  .app-footer,
+  .logs-section,
+  .call-gallery-shelf,
+  .video-floating-bar,
+  .host-profile-banner,
+  .host-actions-bar,
+  .custom-context-menu,
+  .modal-overlay,
+  .placeholder-tip,
+  #btnLobbyWantToStream,
+  #btnWantToStream,
+  #btnAudioTip,
+  #audioTipBanner {
+    display: none !important;
+  }
+
+  body {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    background: #000000 !important;
+  }
+
+  .app-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    height: 100vh !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  .main-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    width: 100vw !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+  }
+
+  .player-section {
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #000000 !important;
+    height: 100vh !important;
+    width: 100vw !important;
+    box-shadow: none !important;
+  }
+
+  .video-wrapper {
+    height: 100vh !important;
+    width: 100vw !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #preview,
+  #canvasPreview {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    border-radius: 0 !important;
+  }
+
+  .video-placeholder {
+    padding: 6px !important;
+    gap: 4px !important;
+  }
+
+  .video-placeholder .placeholder-icon-svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .video-placeholder p {
+    font-size: 0.72rem !important;
+    margin: 0 !important;
+  }
+}
+
+body.pip-mini-mode .app-header,
+body.pip-mini-mode .app-footer,
+body.pip-mini-mode .logs-section,
+body.pip-mini-mode .call-gallery-shelf,
+body.pip-mini-mode .video-floating-bar,
+body.pip-mini-mode .host-profile-banner,
+body.pip-mini-mode .host-actions-bar,
+body.pip-mini-mode .custom-context-menu,
+body.pip-mini-mode .modal-overlay,
+body.pip-mini-mode #btnLobbyWantToStream,
+body.pip-mini-mode #btnWantToStream,
+body.pip-mini-mode #btnAudioTip,
+body.pip-mini-mode #audioTipBanner {
+  display: none !important;
+}
+
+body.pip-mini-mode .player-section,
+body.pip-mini-mode .video-wrapper,
+body.pip-mini-mode .main-grid,
+body.pip-mini-mode .app-container {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  height: 100vh !important;
+  width: 100vw !important;
+  background: #000000 !important;
+}
