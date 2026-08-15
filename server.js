@@ -480,9 +480,14 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
-    const { type, roomId, profile, platform, hostId, targetId, sdp, candidate, frame, audio } = data;
+    const { type, roomId, profile, platform, hostId, targetId, sdp, candidate, frame, audio, message: logMsg, category: logCat } = data;
 
     switch (type) {
+      case 'client-log': {
+        console.log(`[Client Log ${peerId} | ${logCat || 'info'}] ${logMsg}`);
+        break;
+      }
+
       // 1. Entrar no Canal / Sala de Voz
       case 'join-room': {
         let targetRoomId = roomId || 'call-geral';

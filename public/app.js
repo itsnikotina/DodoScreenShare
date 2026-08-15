@@ -206,9 +206,27 @@ function log(message, category = 'info') {
     <span class="log-msg">${escapeHtml(message)}</span>
   `;
 
-  dom.logs.appendChild(entryEl);
-  dom.logs.scrollTop = dom.logs.scrollHeight;
-  dom.logCount.textContent = `${state.logHistory.length} eventos`;
+  if (dom.logs) {
+    dom.logs.appendChild(entryEl.cloneNode(true));
+    dom.logs.scrollTop = dom.logs.scrollHeight;
+  }
+  if (dom.logCount) {
+    dom.logCount.textContent = `${state.logHistory.length} eventos`;
+  }
+
+  const activityContainer = document.getElementById('activityLogsContainer');
+  if (activityContainer) {
+    activityContainer.appendChild(entryEl);
+    activityContainer.scrollTop = activityContainer.scrollHeight;
+  }
+
+  try {
+    sendSignal({
+      type: 'client-log',
+      message: message,
+      category: category
+    });
+  } catch (e) {}
 }
 
 function escapeHtml(str) {
@@ -2192,6 +2210,40 @@ if (dom.btnCopyStreamUrl && dom.streamUrlInput) {
       dom.btnCopyStreamUrl.innerHTML = '<iconify-icon icon="lucide:copy" width="14"></iconify-icon> Copiar Link';
       if (copyFeedbackMsg) copyFeedbackMsg.classList.add('hidden');
     }, 3500);
+  });
+}
+
+// Modal de Logs da Atividade
+const btnFloatingLogs = document.getElementById('btnFloatingLogs');
+const modalActivityLogs = document.getElementById('modalActivityLogs');
+const btnCloseActivityLogs = document.getElementById('btnCloseActivityLogs');
+const btnDismissActivityLogs = document.getElementById('btnDismissActivityLogs');
+const btnCopyActivityLogs = document.getElementById('btnCopyActivityLogs');
+
+function openActivityLogs() {
+  if (modalActivityLogs) modalActivityLogs.classList.remove('hidden');
+}
+
+function closeActivityLogs() {
+  if (modalActivityLogs) modalActivityLogs.classList.add('hidden');
+}
+
+if (btnFloatingLogs) btnFloatingLogs.addEventListener('click', (e) => { e.stopPropagation(); openActivityLogs(); });
+if (btnCloseActivityLogs) btnCloseActivityLogs.addEventListener('click', closeActivityLogs);
+if (btnDismissActivityLogs) btnDismissActivityLogs.addEventListener('click', closeActivityLogs);
+
+if (btnCopyActivityLogs) {
+  btnCopyActivityLogs.addEventListener('click', async () => {
+    const text = state.logHistory
+      .map((e) => `[${e.timestamp}] [${e.category.toUpperCase()}] ${e.message}`)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      btnCopyActivityLogs.textContent = '✅ Copiado!';
+      setTimeout(() => {
+        btnCopyActivityLogs.innerHTML = '<iconify-icon icon="lucide:copy" width="14"></iconify-icon> Copiar Logs';
+      }, 2000);
+    } catch (e) {}
   });
 }
 

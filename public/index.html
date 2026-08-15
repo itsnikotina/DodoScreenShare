@@ -163,6 +163,9 @@
               <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" title="Ajustar Volume">
               <span id="volumePercent" class="volume-percent">100%</span>
             </div>
+            <button id="btnFloatingLogs" class="btn-floating" title="Ver Logs da Atividade">
+              <iconify-icon icon="lucide:terminal" width="16"></iconify-icon>
+            </button>
           </div>
 
           <!-- Galeria de Membros e Streams (Discord Call Layout - Grade Inferior) -->
@@ -290,8 +293,34 @@
     </div>
   </div>
 
+  <!-- Modal de Logs dentro da Atividade do Discord -->
+  <div class="modal-overlay hidden" id="modalActivityLogs">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <iconify-icon icon="lucide:terminal" width="18" style="color: var(--accent-discord);"></iconify-icon>
+          <h3>Logs e Diagnóstico da Atividade</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseActivityLogs">
+          <iconify-icon icon="lucide:x" width="18"></iconify-icon>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 12px; gap: 10px;">
+        <div class="logs-container" id="activityLogsContainer" style="height: 280px; max-height: 280px; overflow-y: auto; background: #0c0d12; border: 1px solid #232734; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.78rem;">
+          <!-- Logs da atividade -->
+        </div>
+        <div class="modal-actions-row" style="margin-top: 6px; display: flex; justify-content: space-between;">
+          <button class="btn btn-secondary btn-sm" id="btnCopyActivityLogs">
+            <iconify-icon icon="lucide:copy" width="14"></iconify-icon> Copiar Logs
+          </button>
+          <button class="btn btn-primary btn-sm" id="btnDismissActivityLogs">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Discord Embedded App SDK para Rich Presence -->
   <script src="https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.1.0/output/index.js"></script>
-  <script src="app.js?v=2.0.4"></script>
+  <script src="app.js?v=2.0.5"></script>
 </body>
 </html>
