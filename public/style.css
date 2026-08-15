@@ -221,6 +221,42 @@ body.discord-activity-mode .video-wrapper {
   background-color: var(--accent-discord-hover);
 }
 
+.btn-discord-pill {
+  background: rgba(88, 101, 242, 0.12);
+  color: #7289da;
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  transition: all 0.18s ease;
+}
+
+.btn-discord-pill:hover {
+  background: var(--accent-discord);
+  color: #ffffff;
+  border-color: var(--accent-discord);
+  transform: translateY(-1px);
+}
+
+.footer-link {
+  color: var(--accent-discord);
+  text-decoration: none;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  transition: color 0.15s ease;
+}
+
+.footer-link:hover {
+  color: #7983f5;
+  text-decoration: underline;
+}
+
 .user-profile-badge {
   display: flex;
   align-items: center;
