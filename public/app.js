@@ -276,27 +276,12 @@ let discordSdk = null;
 const sessionStartTime = Math.floor(Date.now() / 1000);
 
 async function setupDiscordRichPresence() {
-  const isIframe = window.self !== window.top || window.location.hostname.includes('discordsays.com');
-  if (!isIframe) {
+  if (!isInsideDiscordActivity()) {
     console.log('[DiscordSDK] Executando fora da Atividade do Discord - Rich Presence ignorado no navegador comum.');
     return;
   }
 
   log(`🔍 URL Atual: ${window.location.pathname}${window.location.search}`, 'info');
-
-  // Garante que query params exigidos pelo SDK oficial estejam presentes
-  const searchParams = new URLSearchParams(window.location.search);
-  if (!searchParams.get('frame_id') || !searchParams.get('instance_id') || !searchParams.get('platform')) {
-    const dummyParams = new URLSearchParams(window.location.search);
-    if (!dummyParams.get('frame_id')) dummyParams.set('frame_id', 'dodo-frame-' + Math.random().toString(36).substring(2, 8));
-    if (!dummyParams.get('instance_id')) dummyParams.set('instance_id', 'dodo-instance-' + Math.random().toString(36).substring(2, 8));
-    if (!dummyParams.get('platform')) dummyParams.set('platform', 'desktop');
-    try {
-      const newUrl = window.location.pathname + '?' + dummyParams.toString() + window.location.hash;
-      window.history.replaceState(null, '', newUrl);
-      log('⚙️ Query params do Discord configurados com sucesso.', 'info');
-    } catch (e) {}
-  }
 
   try {
     log('🎮 Inicializando Discord Embedded SDK oficial v2.5.0...', 'info');
@@ -476,15 +461,19 @@ async function updateDiscordPresence(details, stateText) {
       console.warn('[DiscordSDK] setActivity erro:', e);
     }
   }
-}
-
 // ==========================================
 // Auto-Detecção do Canal de Voz e Ambiente
 // ==========================================
+function isInsideDiscordActivity() {
+  const inIframe = window.self !== window.top;
+  const isDiscordHost = window.location.hostname.includes('discordsays.com') || window.location.hostname.includes('discord.com');
+  const hasDiscordParams = window.location.search.includes('frame_id=') || window.location.search.includes('instance_id=') || window.location.search.includes('discord_proxy_ticket=');
+  return inIframe || isDiscordHost || hasDiscordParams;
+}
+
 function detectVoiceChannelRoom() {
   const urlParams = new URLSearchParams(window.location.search);
-  const channelId = urlParams.get('channel_id') || urlParams.get('instance_id') || urlParams.get('room');
-  
+  const channelId = urlParams.get('channel_id');
   if (channelId) {
     state.roomId = channelId;
     dom.diagRoomName.textContent = `Canal #${channelId.slice(0, 10)}`;
@@ -493,12 +482,7 @@ function detectVoiceChannelRoom() {
     dom.diagRoomName.textContent = 'Canal Principal';
   }
 
-  const isIframe = window.self !== window.top;
-  const isDiscordHost = window.location.hostname.includes('discordsays.com') || window.location.hostname.includes('discord.com');
-  const isElectron = /Electron/i.test(navigator.userAgent) || /discord/i.test(navigator.userAgent);
-  const isDiscordActivity = isIframe || isDiscordHost || (isElectron && isIframe);
-
-  if (isDiscordActivity) {
+  if (isInsideDiscordActivity()) {
     document.body.classList.add('discord-activity-mode');
   } else {
     document.body.classList.remove('discord-activity-mode');
@@ -1138,27 +1122,37 @@ async function startScreenSharing() {
 
   log(`⚙️ Configuração de Saída: ${res} @ ${fps} FPS`, 'info');
 
-  const displayMediaOptions = {
-    video: {
-      cursor: 'always',
-      displaySurface: 'monitor',
-      frameRate: { ideal: fps, max: fps },
-      width: { ideal: maxW, max: maxW },
-      height: { ideal: maxH, max: maxH }
-    },
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-      channelCount: 2
-    },
-    systemAudio: 'include',
-    surfaceSwitching: 'include',
-    selfBrowserSurface: 'include'
-  };
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        frameRate: { ideal: fps, max: fps },
+        width: { ideal: maxW, max: maxW },
+        height: { ideal: maxH, max: maxH }
+      },
+      audio: true
+    });
+  } catch (err1) {
+    if (err1.name === 'NotAllowedError' || err1.name === 'PermissionDeniedError') {
+      log('Captura de tela cancelada pelo usuário.', 'warn');
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      });
+    } catch (err2) {
+      if (err2.name === 'NotAllowedError' || err2.name === 'PermissionDeniedError') {
+        log('Captura de tela cancelada pelo usuário.', 'warn');
+        return;
+      }
+      log(`Erro ao capturar tela: ${err2.message}`, 'error');
+      return;
+    }
+  }
 
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
     state.localStream = stream;
     state.isHosting = true;
 
@@ -2397,10 +2391,11 @@ startFpsMonitor();
 if (!isInsideDiscordActivity()) {
   if (dom.btnWantToStream) dom.btnWantToStream.style.display = 'none';
   if (btnFloatingWantToStream) btnFloatingWantToStream.style.display = 'none';
+  if (btnLobbyWantToStream) btnLobbyWantToStream.style.display = 'none';
   if (dom.volumeControlGroup) dom.volumeControlGroup.style.display = 'none';
   if (dom.callGalleryShelf) dom.callGalleryShelf.style.display = 'none';
   const qualityGroup = document.getElementById('viewerQualityGroup');
   if (qualityGroup) qualityGroup.style.display = 'none';
   dom.placeholderText.textContent = 'Painel de Transmissão do Host';
-  dom.placeholderTip.textContent = 'Clique em "Compartilhar Minha Tela" acima ou no centro para transmitir. Os membros da call assistirão pela Atividade do Discord!';
+  dom.placeholderTip.textContent = 'Clique no botão acima para selecionar a janela ou tela que deseja transmitir.';
 }
