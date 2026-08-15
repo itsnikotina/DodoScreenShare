@@ -1283,8 +1283,12 @@ body.no-scroll {
     border-radius: 0 !important;
   }
 
-  /* Placeholder Completo e Proporcional no Mini-Player */
-  .video-placeholder {
+  /* Placeholder Completo e Proporcional no Mini-Player (Apenas quando visível) */
+  .video-placeholder.hidden {
+    display: none !important;
+  }
+
+  .video-placeholder:not(.hidden) {
     padding: 10px !important;
     gap: 6px !important;
     display: flex !important;
@@ -1358,6 +1362,14 @@ body.pip-mini-mode .app-container {
   height: 100vh !important;
   width: 100vw !important;
   background: #000000 !important;
+}
+
+body.pip-mini-mode .video-placeholder.hidden {
+  display: none !important;
+}
+
+body.pip-mini-mode .video-placeholder:not(.hidden) {
+  display: flex !important;
 }
 
 body.pip-mini-mode .placeholder-tip {
