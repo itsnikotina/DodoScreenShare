@@ -461,6 +461,8 @@ async function updateDiscordPresence(details, stateText) {
       console.warn('[DiscordSDK] setActivity erro:', e);
     }
   }
+}
+
 // ==========================================
 // Auto-Detecção do Canal de Voz e Ambiente
 // ==========================================
@@ -761,11 +763,7 @@ function setFocusMode(focused) {
     dom.videoWrapper.classList.add('is-focused');
   } else {
     dom.videoWrapper.classList.remove('is-focused');
-function isInsideDiscordActivity() {
-  const inIframe = window.self !== window.top;
-  const isDiscordProxy = window.location.hostname.includes('discordsays.com');
-  const hasDiscordParams = window.location.search.includes('discord_proxy_ticket=') || (window.location.search.includes('frame_id=') && inIframe);
-  return inIframe || isDiscordProxy || hasDiscordParams;
+  }
 }
 
 function updateAvailableStreams(streams, participants = []) {
