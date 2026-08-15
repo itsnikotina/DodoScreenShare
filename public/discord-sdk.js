@@ -7277,11 +7277,13 @@ var Discord = (() => {
       "http://localhost:3333",
       "https://pax.discord.com",
       "null"
-    ];
-  }
   function getRPCServerSource() {
     var _a;
-    return [(_a = window.parent.opener) !== null && _a !== void 0 ? _a : window.parent, !!document.referrer ? document.referrer : "*"];
+    let origin = "*";
+    if (document.referrer) {
+      try { origin = new URL(document.referrer).origin; } catch (e) { origin = "*"; }
+    }
+    return [(_a = window.parent.opener) !== null && _a !== void 0 ? _a : window.parent, origin];
   }
   var DiscordSDK = class {
     getTransfer(payload) {
@@ -7314,7 +7316,7 @@ var Discord = (() => {
       };
       this.commands = commands(this.sendCommand);
       this.handleMessage = (event) => {
-        if (!ALLOWED_ORIGINS.has(event.origin))
+        if (event.origin && !ALLOWED_ORIGINS.has(event.origin) && !event.origin.includes('discord') && !event.origin.includes('discordsays'))
           return;
         const tuple = event.data;
         if (!Array.isArray(tuple)) {
