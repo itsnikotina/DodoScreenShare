@@ -278,19 +278,51 @@ async function setupDiscordRichPresence() {
     return;
   }
 
+  log(`🔍 URL Atual: ${window.location.pathname}${window.location.search}`, 'info');
+
+  // Garante que query params exigidos pelo SDK oficial estejam presentes
+  const searchParams = new URLSearchParams(window.location.search);
+  if (!searchParams.get('frame_id') || !searchParams.get('instance_id') || !searchParams.get('platform')) {
+    const dummyParams = new URLSearchParams(window.location.search);
+    if (!dummyParams.get('frame_id')) dummyParams.set('frame_id', 'dodo-frame-' + Math.random().toString(36).substring(2, 8));
+    if (!dummyParams.get('instance_id')) dummyParams.set('instance_id', 'dodo-instance-' + Math.random().toString(36).substring(2, 8));
+    if (!dummyParams.get('platform')) dummyParams.set('platform', 'desktop');
+    try {
+      const newUrl = window.location.pathname + '?' + dummyParams.toString() + window.location.hash;
+      window.history.replaceState(null, '', newUrl);
+      log('⚙️ Query params do Discord configurados com sucesso.', 'info');
+    } catch (e) {}
+  }
+
   try {
     log('🎮 Inicializando Discord Embedded SDK oficial v2.5.0...', 'info');
 
     const SDKClass = (window.Discord && window.Discord.DiscordSDK) || window.DiscordSDK;
     if (SDKClass) {
-      discordSdk = new SDKClass('787371101177118750');
-      await discordSdk.ready();
-      log('🎉 Discord SDK oficial pronto e conectado!', 'success');
+      try {
+        discordSdk = new SDKClass('787371101177118750');
+        log('📦 Instância do DiscordSDK criada.', 'info');
+      } catch (instErr) {
+        log(`❌ Erro ao instanciar DiscordSDK: ${instErr.message}`, 'error');
+        return;
+      }
+
+      // Aguarda ready com timeout de 3 segundos
+      try {
+        log('⏳ Aguardando ready() do Discord SDK...', 'info');
+        await Promise.race([
+          discordSdk.ready(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout aguardando ready()')), 3500))
+        ]);
+        log('🎉 Discord SDK oficial pronto e conectado!', 'success');
+      } catch (readyErr) {
+        log(`⚠️ Aviso no ready() do SDK: ${readyErr.message} (prosseguindo)`, 'warn');
+      }
 
       // 1. Autorização com o escopo oficial rpc.activities.write
       try {
         log('🔑 Solicitando autorização rpc.activities.write ao Discord...', 'info');
-        const authResult = await discordSdk.commands.authorize({
+        const authPromise = discordSdk.commands.authorize({
           client_id: '787371101177118750',
           response_type: 'code',
           state: '',
@@ -298,7 +330,12 @@ async function setupDiscordRichPresence() {
           scope: ['identify', 'rpc.activities.write']
         });
 
-        console.log('[DiscordSDK] Resultado da autorização:', authResult);
+        const authResult = await Promise.race([
+          authPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout na autorização do Discord')), 6000))
+        ]);
+
+        log(`📥 Resultado da autorização: ${JSON.stringify(authResult)}`, 'info');
 
         if (authResult && authResult.code) {
           log('🔄 Code recebido! Trocando por token de Rich Presence...', 'info');
@@ -309,7 +346,7 @@ async function setupDiscordRichPresence() {
           });
 
           const tokenJson = await tokenRes.json();
-          console.log('[DiscordSDK] Resposta do /api/token:', tokenJson);
+          log(`📥 Resposta do /api/token: ${JSON.stringify(tokenJson)}`, 'info');
 
           if (tokenRes.ok && tokenJson.access_token) {
             await discordSdk.commands.authenticate({ access_token: tokenJson.access_token });
@@ -333,10 +370,10 @@ async function setupDiscordRichPresence() {
         discordSdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', syncVoiceChannelParticipants);
       } catch (e) {}
     } else {
-      log('⚠️ window.Discord.DiscordSDK não carregado.', 'warn');
+      log('⚠️ window.Discord.DiscordSDK não carregado no window.', 'warn');
     }
   } catch (err) {
-    console.warn('[DiscordSDK] Erro ao inicializar SDK:', err);
+    console.warn('[DiscordSDK] Erro geral ao inicializar SDK:', err);
     log(`❌ Erro no SDK do Discord: ${err.message}`, 'error');
   }
 }
