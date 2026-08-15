@@ -209,6 +209,44 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     console.error('[Discord OAuth Debug] Exceção interna no callback:', err);
     res.redirect(`/?auth_error=${encodeURIComponent(err.message)}`);
   }
+// Endpoint para troca de token do Embedded App SDK (Rich Presence)
+app.post('/api/token', async (req, res) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+
+  if (!DISCORD_CLIENT_SECRET) {
+    return res.status(500).json({ error: 'DISCORD_CLIENT_SECRET missing' });
+  }
+
+  try {
+    const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'User-Agent': 'DiscordBot (https://github.com/itsnikotina/DodoScreenShare, 1.0.0)'
+      },
+      body: new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code: code
+      }).toString()
+    });
+
+    const data = await tokenResponse.json();
+    if (!tokenResponse.ok) {
+      console.error('[Discord SDK Token] Erro na troca de token:', data);
+      return res.status(tokenResponse.status).json(data);
+    }
+
+    res.json({ access_token: data.access_token });
+  } catch (err) {
+    console.error('[Discord SDK Token] Exceção:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Endpoint de diagnóstico do servidor

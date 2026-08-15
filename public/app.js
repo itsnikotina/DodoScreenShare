@@ -222,6 +222,77 @@ function escapeHtml(str) {
 // ==========================================
 // Discord Embedded App SDK & Rich Presence (Dodo)
 // ==========================================
+class EmbeddedDiscordSDK {
+  constructor(clientId) {
+    this.clientId = clientId;
+    this.frameId = new URLSearchParams(window.location.search).get('frame_id');
+    this.instanceId = new URLSearchParams(window.location.search).get('instance_id');
+    this._listeners = new Map();
+    this.commands = {
+      authorize: (args) => this._rpc('AUTHORIZE', args),
+      authenticate: (args) => this._rpc('AUTHENTICATE', args),
+      setActivity: (args) => this._rpc('SET_ACTIVITY', args),
+      getInstanceConnectedParticipants: (args) => this._rpc('GET_INSTANCE_CONNECTED_PARTICIPANTS', args || {})
+    };
+
+    window.addEventListener('message', (e) => {
+      let msg = e.data;
+      if (typeof msg === 'string') {
+        try { msg = JSON.parse(msg); } catch (err) {}
+      }
+      if (msg && msg.evt && this._listeners.has(msg.evt)) {
+        const callbacks = this._listeners.get(msg.evt);
+        callbacks.forEach((cb) => {
+          try { cb(msg.data); } catch (err) {}
+        });
+      }
+    });
+  }
+
+  async ready() {
+    return this._rpc('READY', {});
+  }
+
+  subscribe(evt, callback) {
+    if (!this._listeners.has(evt)) {
+      this._listeners.set(evt, []);
+      this._rpc('SUBSCRIBE', { evt });
+    }
+    this._listeners.get(evt).push(callback);
+  }
+
+  _rpc(cmd, args) {
+    return new Promise((resolve) => {
+      const nonce = Math.random().toString(36).substring(2);
+      const onResponse = (e) => {
+        let msg = e.data;
+        if (typeof msg === 'string') {
+          try { msg = JSON.parse(msg); } catch (err) {}
+        }
+        if (msg && msg.nonce === nonce) {
+          window.removeEventListener('message', onResponse);
+          if (msg.evt === 'ERROR') {
+            console.warn('[DiscordSDK RPC] Erro:', msg.data);
+            resolve(msg.data || null);
+          } else {
+            resolve(msg.data || {});
+          }
+        }
+      };
+
+      window.addEventListener('message', onResponse);
+      const payload = { cmd, args, nonce };
+      window.parent.postMessage(JSON.stringify(payload), '*');
+      window.parent.postMessage(payload, '*');
+
+      setTimeout(() => {
+        window.removeEventListener('message', onResponse);
+        resolve({});
+      }, 5000);
+    });
+  }
+}
+
 let discordSdk = null;
 const sessionStartTime = Math.floor(Date.now() / 1000);
 
@@ -230,21 +301,48 @@ async function setupDiscordRichPresence() {
   if (!isIframe) return;
 
   try {
-    const SDKClass = window.DiscordSDK || (window.Discord && window.Discord.DiscordSDK) || (window.discord && window.discord.DiscordSDK);
-    if (SDKClass) {
-      discordSdk = new SDKClass('787371101177118750');
-      await discordSdk.ready();
-      log('Discord Embedded App SDK pronto e ativo!', 'success');
-      updateDiscordPresence('Assistindo tela via Dodo', 'Dodo Screen Share');
+    const SDKClass = window.DiscordSDK || (window.Discord && window.Discord.DiscordSDK) || EmbeddedDiscordSDK;
+    discordSdk = new SDKClass('787371101177118750');
+    await discordSdk.ready();
+    log('Discord Embedded App SDK pronto e ativo!', 'success');
 
-      // Sincroniza todos os participantes da chamada do Discord
-      syncVoiceChannelParticipants();
-      try {
-        discordSdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', syncVoiceChannelParticipants);
-      } catch (e) {}
-    } else {
-      console.log('[DiscordSDK] SDKClass não encontrada no window');
+    // 1. Autorização com o escopo oficial rpc.activities.write
+    try {
+      const authResult = await discordSdk.commands.authorize({
+        client_id: '787371101177118750',
+        response_type: 'code',
+        state: '',
+        prompt: 'none',
+        scope: ['identify', 'rpc.activities.write']
+      });
+
+      if (authResult && authResult.code) {
+        log('Autenticando permissão de Rich Presence...', 'info');
+        const tokenRes = await fetch('/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: authResult.code })
+        });
+
+        if (tokenRes.ok) {
+          const { access_token } = await tokenRes.json();
+          if (access_token) {
+            await discordSdk.commands.authenticate({ access_token });
+            log('Rich Presence autenticado com sucesso no Discord!', 'success');
+          }
+        }
+      }
+    } catch (authErr) {
+      console.warn('[DiscordSDK] Autorização Rich Presence:', authErr);
     }
+
+    updateDiscordPresence('Assistindo tela via Dodo', 'Dodo Screen Share');
+
+    // Sincroniza todos os participantes da chamada do Discord
+    syncVoiceChannelParticipants();
+    try {
+      discordSdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', syncVoiceChannelParticipants);
+    } catch (e) {}
   } catch (err) {
     console.warn('[DiscordSDK] Erro ao inicializar SDK:', err);
   }
