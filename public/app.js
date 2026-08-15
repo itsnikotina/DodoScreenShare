@@ -2206,9 +2206,18 @@ function closeStreamModal() {
 const btnLobbyWantToStream = document.getElementById('btnLobbyWantToStream');
 const btnFloatingWantToStream = document.getElementById('btnFloatingWantToStream');
 
-if (btnLobbyWantToStream) btnLobbyWantToStream.addEventListener('click', (e) => { e.stopPropagation(); openStreamModal(); });
-if (btnFloatingWantToStream) btnFloatingWantToStream.addEventListener('click', (e) => { e.stopPropagation(); openStreamModal(); });
-if (dom.btnWantToStream) dom.btnWantToStream.addEventListener('click', (e) => { e.stopPropagation(); openStreamModal(); });
+function handleWantToStreamClick(e) {
+  if (e) e.stopPropagation();
+  if (isInsideDiscordActivity()) {
+    openStreamModal();
+  } else {
+    startScreenSharing();
+  }
+}
+
+if (btnLobbyWantToStream) btnLobbyWantToStream.addEventListener('click', handleWantToStreamClick);
+if (btnFloatingWantToStream) btnFloatingWantToStream.addEventListener('click', handleWantToStreamClick);
+if (dom.btnWantToStream) dom.btnWantToStream.addEventListener('click', handleWantToStreamClick);
 
 if (dom.btnCloseStreamModal) dom.btnCloseStreamModal.addEventListener('click', closeStreamModal);
 if (dom.btnDismissStreamModal) dom.btnDismissStreamModal.addEventListener('click', closeStreamModal);
@@ -2388,9 +2397,10 @@ startFpsMonitor();
 if (!isInsideDiscordActivity()) {
   if (dom.btnWantToStream) dom.btnWantToStream.style.display = 'none';
   if (btnFloatingWantToStream) btnFloatingWantToStream.style.display = 'none';
-  if (btnLobbyWantToStream) btnLobbyWantToStream.style.display = 'none';
   if (dom.volumeControlGroup) dom.volumeControlGroup.style.display = 'none';
   if (dom.callGalleryShelf) dom.callGalleryShelf.style.display = 'none';
+  const qualityGroup = document.getElementById('viewerQualityGroup');
+  if (qualityGroup) qualityGroup.style.display = 'none';
   dom.placeholderText.textContent = 'Painel de Transmissão do Host';
-  dom.placeholderTip.textContent = 'Clique em "Compartilhar Minha Tela" acima para transmitir. Os membros da call assistirão pela Atividade do Discord!';
+  dom.placeholderTip.textContent = 'Clique em "Compartilhar Minha Tela" acima ou no centro para transmitir. Os membros da call assistirão pela Atividade do Discord!';
 }
