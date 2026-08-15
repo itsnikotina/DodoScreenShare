@@ -111,10 +111,19 @@ app.get('/api/auth/discord/callback', async (req, res) => {
       }).toString()
     });
 
-    const tokenData = await tokenResponse.json();
+    const tokenText = await tokenResponse.text();
+    let tokenData;
+    try {
+      tokenData = JSON.parse(tokenText);
+    } catch (e) {
+      console.error('[Discord OAuth] Resposta não-JSON recebida da API do Discord:', tokenText);
+      return res.redirect('/?auth_error=redirect_uri_nao_cadastrada_no_discord_developer_portal');
+    }
+
     if (!tokenResponse.ok || !tokenData.access_token) {
       console.error('[Discord OAuth] Erro ao obter token:', tokenData);
-      return res.redirect(`/?auth_error=${encodeURIComponent(tokenData.error_description || 'token_failed')}`);
+      const errMsg = tokenData.error_description || tokenData.error || 'token_failed';
+      return res.redirect(`/?auth_error=${encodeURIComponent(errMsg)}`);
     }
 
     const userResponse = await fetch('https://discord.com/api/users/@me', {
@@ -123,7 +132,15 @@ app.get('/api/auth/discord/callback', async (req, res) => {
       }
     });
 
-    const userData = await userResponse.json();
+    const userText = await userResponse.text();
+    let userData;
+    try {
+      userData = JSON.parse(userText);
+    } catch (e) {
+      console.error('[Discord OAuth] Erro ao decodificar perfil:', userText);
+      return res.redirect('/?auth_error=user_fetch_failed');
+    }
+
     if (!userResponse.ok) {
       console.error('[Discord OAuth] Erro ao obter perfil:', userData);
       return res.redirect('/?auth_error=user_fetch_failed');
