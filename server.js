@@ -81,6 +81,11 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+function getDiscordRedirectUri(req) {
+  const baseUrl = getPublicServerUrl(req).replace(/\/+$/, '');
+  return `${baseUrl}/api/auth/discord/callback`;
+}
+
 // ==========================================
 // Rotas de Discord OAuth2
 // ==========================================
@@ -89,9 +94,8 @@ app.get('/api/auth/discord/login', (req, res) => {
     return res.status(500).send('DISCORD_CLIENT_ID não configurado no servidor.');
   }
 
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  const redirectUri = `${protocol}://${host}/api/auth/discord/callback`;
+  const redirectUri = getDiscordRedirectUri(req);
+  console.log(`[Discord OAuth] Iniciando login com redirect_uri: ${redirectUri}`);
 
   const authUrl = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify`;
   res.redirect(authUrl);
@@ -108,9 +112,8 @@ app.get('/api/auth/discord/callback', async (req, res) => {
   }
 
   try {
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const host = req.headers['x-forwarded-host'] || req.get('host');
-    const redirectUri = `${protocol}://${host}/api/auth/discord/callback`;
+    const redirectUri = getDiscordRedirectUri(req);
+    console.log(`[Discord OAuth] Trocando code com redirect_uri: ${redirectUri}`);
 
     const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
