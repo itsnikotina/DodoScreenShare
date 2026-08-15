@@ -1317,13 +1317,19 @@ body.no-scroll {
     max-width: 85% !important;
   }
 
-  #btnLobbyWantToStream {
+  #btnLobbyWantToStream,
+  #btnBackToLobby {
     display: inline-flex !important;
-    padding: 6px 12px !important;
-    font-size: 0.75rem !important;
-    margin-top: 6px !important;
-    gap: 6px !important;
+    padding: 5px 10px !important;
+    font-size: 0.72rem !important;
+    margin-top: 4px !important;
+    gap: 4px !important;
     border-radius: 4px !important;
+  }
+
+  .placeholder-tip div {
+    font-size: 0.68rem !important;
+    margin-bottom: 4px !important;
   }
 }
 
@@ -1358,6 +1364,7 @@ body.pip-mini-mode .placeholder-tip {
   display: block !important;
 }
 
-body.pip-mini-mode #btnLobbyWantToStream {
+body.pip-mini-mode #btnLobbyWantToStream,
+body.pip-mini-mode #btnBackToLobby {
   display: inline-flex !important;
 }
