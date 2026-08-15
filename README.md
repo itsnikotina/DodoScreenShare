@@ -11,10 +11,10 @@ Este projeto nasceu com um propósito muito simples e essencial: **manter a amiz
 Com as recentes discussões e a possibilidade de bloqueios ao recurso nativo de compartilhamento de tela do Discord no Brasil, percebi que isso acabaria destruindo a rotina e os momentos especiais que tenho com os meus amigos. 
 
 Nós sempre nos reunimos em chamadas de voz para:
-- 🎬 **Assistir a vídeos juntos no YouTube** e dar risadas;
-- 🎵 **Acompanhar e dar feedback em projetos de música**;
-- 🎨 **Ver o processo criativo de desenhos e artes** em tempo real;
-- 🕹️ **Assistir gameplay e ver os amigos jogando**.
+- 🍿 **Assistir juntos a filmes, séries, vídeos no YouTube e muitos desenhos animados** (somos apaixonados por animações!);
+- 🎵 **Acompanhar e dar feedback em projetos autorais de música**;
+- 🎨 **Ver o processo criativo de ilustrações, desenhos e artes** em tempo real;
+- 🕹️ **Assistir a gameplays e ver a galera jogando**.
 
 Como nada disso deveria ser interrompido por decisões externas ou restrições regionais, desenvolvi o **Dodo Screen Share** como uma solução alternativa, leve e independente para que qualquer pessoa possa continuar compartilhando sua tela, áudio e momentos com seus amigos diretamente no Discord, sem barreiras.
 
