@@ -1928,10 +1928,10 @@ function getPublicPanelUrl() {
   if (state.serverPublicUrl && !state.serverPublicUrl.includes('discordsays.com')) {
     return state.serverPublicUrl;
   }
-  if (!window.location.origin.includes('discordsays.com')) {
+  if (!window.location.origin.includes('discordsays.com') && !window.location.origin.includes('localhost')) {
     return `${window.location.origin}/`;
   }
-  return state.serverPublicUrl || `${window.location.origin}/`;
+  return 'https://dodoscreenshare.onrender.com/';
 }
 
 // Busca a URL dinâmica do servidor imediatamente

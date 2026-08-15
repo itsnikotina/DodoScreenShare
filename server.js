@@ -56,13 +56,28 @@ app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
+function getPublicServerUrl(req) {
+  if (process.env.PUBLIC_URL) {
+    const u = process.env.PUBLIC_URL.trim();
+    return u.endsWith('/') ? u : `${u}/`;
+  }
+  if (process.env.RENDER_EXTERNAL_URL) {
+    const u = process.env.RENDER_EXTERNAL_URL.trim();
+    return u.endsWith('/') ? u : `${u}/`;
+  }
+  const host = req ? (req.headers['x-forwarded-host'] || req.headers.host || '') : '';
+  const proto = req ? (req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http')) : 'https';
+  
+  if (host && !host.includes('discordsays.com') && !host.includes('discord.com')) {
+    return `${proto}://${host}/`;
+  }
+  return 'https://dodoscreenshare.onrender.com/';
+}
+
 // Rota de Configuração Dinâmica para Clientes Web / Discord Activity
 app.get('/api/config', (req, res) => {
-  const forwardedProto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-  const forwardedHost = req.headers['x-forwarded-host'] || req.get('host');
-  const detectedUrl = process.env.PUBLIC_URL || `${forwardedProto}://${forwardedHost}`;
   res.json({
-    publicUrl: detectedUrl.endsWith('/') ? detectedUrl : `${detectedUrl}/`
+    publicUrl: getPublicServerUrl(req)
   });
 });
 
@@ -380,14 +395,10 @@ wss.on('connection', (ws, req) => {
 
   console.log(`[WebSocket] Cliente conectado: ID ${peerId} (${req.socket.remoteAddress})`);
 
-  const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
-  const forwardedHost = req.headers['x-forwarded-host'] || req.headers.host;
-  const detectedUrl = process.env.PUBLIC_URL || `${forwardedProto}://${forwardedHost}`;
-
   ws.send(JSON.stringify({
     type: 'connected',
     peerId: peerId,
-    publicUrl: detectedUrl.endsWith('/') ? detectedUrl : `${detectedUrl}/`
+    publicUrl: getPublicServerUrl(req)
   }));
 
   ws.on('message', (message) => {
