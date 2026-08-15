@@ -267,84 +267,128 @@ function copyTextToClipboard(text) {
 
 // ==========================================
 // Discord Embedded App SDK & Rich Presence (Dodo)
+// Protocolo Oficial Discord RPC (Array Opcode Specification)
 // ==========================================
 class EmbeddedDiscordSDK {
   constructor(clientId) {
     this.clientId = clientId;
-    this.frameId = new URLSearchParams(window.location.search).get('frame_id');
-    this.instanceId = new URLSearchParams(window.location.search).get('instance_id');
-    this._listeners = new Map();
+    const urlParams = new URLSearchParams(window.location.search);
+    this.frameId = urlParams.get('frame_id') || '';
+    this.instanceId = urlParams.get('instance_id') || '';
+    this.platform = urlParams.get('platform') || 'desktop';
+    this.source = (window.parent && window.parent.opener) || window.parent;
+    this.isReady = false;
+    this.pending = new Map();
+    this.listeners = new Map();
+
     this.commands = {
-      authorize: (args) => this._rpc('AUTHORIZE', args),
-      authenticate: (args) => this._rpc('AUTHENTICATE', args),
-      setActivity: (args) => this._rpc('SET_ACTIVITY', args),
-      getInstanceConnectedParticipants: (args) => this._rpc('GET_INSTANCE_CONNECTED_PARTICIPANTS', args || {})
+      authorize: (args) => this.sendCommand('AUTHORIZE', args),
+      authenticate: (args) => this.sendCommand('AUTHENTICATE', args),
+      setActivity: (args) => this.sendCommand('SET_ACTIVITY', args),
+      getInstanceConnectedParticipants: (args) => this.sendCommand('GET_INSTANCE_CONNECTED_PARTICIPANTS', args || {})
     };
 
-    window.addEventListener('message', (e) => {
-      let msg = e.data;
-      if (typeof msg === 'string') {
-        try { msg = JSON.parse(msg); } catch (err) {}
-      }
-      if (msg && (msg.cmd || msg.evt || msg.nonce)) {
-        console.log('[Discord Raw PostMessage]', msg);
-        if (msg.cmd || msg.evt) {
-          log(`[RPC In] cmd=${msg.cmd || ''} evt=${msg.evt || ''} nonce=${msg.nonce || ''}`, 'info');
+    window.addEventListener('message', (event) => {
+      if (!event.data) return;
+
+      // Trata mensagens no formato oficial do Discord SDK [Opcode, Data]
+      if (Array.isArray(event.data)) {
+        const [opcode, data] = event.data;
+
+        // Opcode 0 = HANDSHAKE / READY
+        if (opcode === 0) {
+          this.isReady = true;
+          log('🎉 Discord Handshake concluído com sucesso!', 'success');
+          if (this._onReady) this._onReady();
+        }
+
+        // Opcode 1 = FRAME (Command Response / Event)
+        if (opcode === 1 && data) {
+          log(`[RPC In] cmd=${data.cmd || ''} evt=${data.evt || ''} nonce=${data.nonce || ''}`, 'info');
+
+          if (data.nonce && this.pending.has(data.nonce)) {
+            const { resolve, reject } = this.pending.get(data.nonce);
+            this.pending.delete(data.nonce);
+            if (data.evt === 'ERROR') {
+              console.warn('[DiscordSDK RPC Error]', data.data);
+              reject(data.data);
+            } else {
+              resolve(data.data || data);
+            }
+          }
+
+          if (data.evt && this.listeners.has(data.evt)) {
+            this.listeners.get(data.evt).forEach((cb) => cb(data.data));
+          }
         }
       }
-      if (msg && msg.evt && this._listeners.has(msg.evt)) {
-        const callbacks = this._listeners.get(msg.evt);
-        callbacks.forEach((cb) => {
-          try { cb(msg.data); } catch (err) {}
-        });
-      }
     });
+
+    this._handshake();
+  }
+
+  _handshake() {
+    const payload = [
+      0, // HANDSHAKE
+      {
+        v: 1,
+        encoding: 'json',
+        client_id: this.clientId,
+        frame_id: this.frameId,
+        sdk_version: '2.5.0'
+      }
+    ];
+    log('Enviando handshake oficial [0, HANDSHAKE] para Discord...', 'info');
+    if (this.source) {
+      this.source.postMessage(payload, '*');
+    }
   }
 
   async ready() {
-    log('Enviando handshake READY para Discord...', 'info');
-    return this._rpc('READY', {});
+    if (this.isReady) return;
+    return new Promise((resolve) => {
+      this._onReady = resolve;
+      setTimeout(() => {
+        this.isReady = true;
+        resolve();
+      }, 2500);
+    });
   }
 
   subscribe(evt, callback) {
-    if (!this._listeners.has(evt)) {
-      this._listeners.set(evt, []);
-      this._rpc('SUBSCRIBE', { evt });
+    if (!this.listeners.has(evt)) {
+      this.listeners.set(evt, []);
+      this.sendCommand('SUBSCRIBE', { evt });
     }
-    this._listeners.get(evt).push(callback);
+    this.listeners.get(evt).push(callback);
   }
 
-  _rpc(cmd, args) {
-    return new Promise((resolve) => {
-      const nonce = Math.random().toString(36).substring(2);
+  sendCommand(cmd, args) {
+    return new Promise((resolve, reject) => {
+      const nonce = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+      this.pending.set(nonce, { resolve, reject });
+
+      const payload = [
+        1, // FRAME
+        {
+          cmd: cmd,
+          args: args,
+          nonce: nonce
+        }
+      ];
+
       log(`[RPC Out] cmd=${cmd} nonce=${nonce}`, 'info');
-
-      const onResponse = (e) => {
-        let msg = e.data;
-        if (typeof msg === 'string') {
-          try { msg = JSON.parse(msg); } catch (err) {}
-        }
-        if (msg && (msg.nonce === nonce || (msg.data && msg.data.nonce === nonce))) {
-          window.removeEventListener('message', onResponse);
-          log(`[RPC Resposta] cmd=${cmd} data=${JSON.stringify(msg.data || msg)}`, 'success');
-          if (msg.evt === 'ERROR') {
-            console.warn('[DiscordSDK RPC] Erro:', msg.data);
-            resolve(msg.data || null);
-          } else {
-            resolve(msg.data || msg || {});
-          }
-        }
-      };
-
-      window.addEventListener('message', onResponse);
-      const payload = { cmd, args, nonce };
-      window.parent.postMessage(JSON.stringify(payload), '*');
-      window.parent.postMessage(payload, '*');
+      if (this.source) {
+        this.source.postMessage(payload, '*');
+      }
 
       setTimeout(() => {
-        window.removeEventListener('message', onResponse);
-        resolve({});
-      }, 6000);
+        if (this.pending.has(nonce)) {
+          this.pending.delete(nonce);
+          log(`⚠️ Timeout RPC cmd=${cmd}`, 'warn');
+          resolve({});
+        }
+      }, 7000);
     });
   }
 }
@@ -361,8 +405,7 @@ async function setupDiscordRichPresence() {
 
   try {
     log('🎮 Inicializando Discord Embedded SDK...', 'info');
-    const SDKClass = window.DiscordSDK || (window.Discord && window.Discord.DiscordSDK) || EmbeddedDiscordSDK;
-    discordSdk = new SDKClass('787371101177118750');
+    discordSdk = new EmbeddedDiscordSDK('787371101177118750');
     await discordSdk.ready();
     log('✅ Discord Embedded App SDK conectado!', 'success');
 
