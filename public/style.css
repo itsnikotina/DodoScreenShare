@@ -731,6 +731,140 @@ body.no-scroll {
   color: #fff;
 }
 
+/* Quality Selector Dropdown (Espectador) */
+.quality-selector-group {
+  position: relative;
+}
+
+.quality-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: rgba(18, 20, 29, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: fadeIn 0.15s ease;
+}
+
+.quality-dropdown.hidden {
+  display: none !important;
+}
+
+.quality-dropdown-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 8px 4px 8px;
+}
+
+.quality-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  border: 1px solid transparent;
+}
+
+.quality-option:hover {
+  background: var(--bg-hover);
+}
+
+.quality-option.active {
+  background: rgba(88, 101, 242, 0.2);
+  border: 1px solid rgba(88, 101, 242, 0.4);
+}
+
+.quality-option iconify-icon {
+  color: var(--accent-discord);
+  flex-shrink: 0;
+}
+
+.opt-labels {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  line-height: 1.15;
+}
+
+.opt-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.opt-desc {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.opt-check {
+  color: var(--accent-success);
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.quality-option.active .opt-check {
+  opacity: 1;
+}
+
+.quality-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.quality-toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.quality-toggle-label:hover {
+  background: var(--bg-hover);
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.toggle-title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.toggle-desc {
+  font-size: 0.63rem;
+  color: var(--text-secondary);
+}
+
+.quality-checkbox {
+  accent-color: var(--accent-discord);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
 .volume-control-group {
   display: flex;
   align-items: center;

@@ -161,6 +161,57 @@
               <iconify-icon icon="lucide:screen-share" width="14"></iconify-icon>
               <span>Transmitir</span>
             </button>
+            <!-- Seletor de Qualidade do Espectador -->
+            <div class="quality-selector-group" id="viewerQualityGroup">
+              <button id="btnViewerQuality" class="btn-floating-pill" title="Ajustar Qualidade e Resolução">
+                <iconify-icon icon="lucide:sliders" width="14"></iconify-icon>
+                <span id="lblViewerQuality">Auto</span>
+              </button>
+              <div class="quality-dropdown hidden" id="qualityDropdown">
+                <div class="quality-dropdown-header">Qualidade de Reprodução</div>
+                <div class="quality-option active" data-quality="auto">
+                  <iconify-icon icon="lucide:sparkles" width="14"></iconify-icon>
+                  <div class="opt-labels">
+                    <span class="opt-title">Automático / Original</span>
+                    <span class="opt-desc">Resolução nativa da transmissão</span>
+                  </div>
+                  <iconify-icon icon="lucide:check" class="opt-check" width="14"></iconify-icon>
+                </div>
+                <div class="quality-option" data-quality="720p">
+                  <iconify-icon icon="lucide:monitor" width="14"></iconify-icon>
+                  <div class="opt-labels">
+                    <span class="opt-title">HD (720p)</span>
+                    <span class="opt-desc">Ótima nitidez e equilíbrio</span>
+                  </div>
+                  <iconify-icon icon="lucide:check" class="opt-check" width="14"></iconify-icon>
+                </div>
+                <div class="quality-option" data-quality="480p">
+                  <iconify-icon icon="lucide:gauge" width="14"></iconify-icon>
+                  <div class="opt-labels">
+                    <span class="opt-title">SD (480p) - Leve</span>
+                    <span class="opt-desc">Reduz uso de CPU e memória</span>
+                  </div>
+                  <iconify-icon icon="lucide:check" class="opt-check" width="14"></iconify-icon>
+                </div>
+                <div class="quality-option" data-quality="360p">
+                  <iconify-icon icon="lucide:feather" width="14"></iconify-icon>
+                  <div class="opt-labels">
+                    <span class="opt-title">Econômico (360p)</span>
+                    <span class="opt-desc">Ultra leve para PCs modestos</span>
+                  </div>
+                  <iconify-icon icon="lucide:check" class="opt-check" width="14"></iconify-icon>
+                </div>
+                <div class="quality-divider"></div>
+                <label class="quality-toggle-label" for="chkCap30Fps">
+                  <div class="toggle-text">
+                    <span class="toggle-title">Limitar a 30 FPS</span>
+                    <span class="toggle-desc">Economiza processamento no PC</span>
+                  </div>
+                  <input type="checkbox" id="chkCap30Fps" class="quality-checkbox">
+                </label>
+              </div>
+            </div>
+
             <div class="volume-control-group" id="volumeControlGroup">
               <button id="btnMute" class="btn-floating" title="Mutar / Desmutar (M)">
                 <iconify-icon icon="lucide:volume-2" id="iconMute" width="18"></iconify-icon>

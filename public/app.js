@@ -79,6 +79,10 @@ const state = {
   savedVolumeBeforeMute: 1.0,
   isMuted: false,
 
+  // Qualidade de Visualização do Espectador (Independente para economizar CPU)
+  viewerQuality: localStorage.getItem('dodo_viewer_quality') || 'auto', // 'auto', '720p', '480p', '360p'
+  viewerCap30Fps: localStorage.getItem('dodo_viewer_cap_30fps') === 'true',
+
   // Web Audio Context Viewer
   viewerAudioCtx: null,
   viewerGainNode: null,
@@ -1506,8 +1510,19 @@ function ensureViewerAudioContext() {
   } catch (err) {}
 }
 
+let lastViewerFrameRenderTime = 0;
+
 function renderIncomingFrame(frameData) {
   if (!frameData) return;
+
+  // 1. Limitação de 30 FPS no espectador para economizar CPU em PCs fracos
+  if (state.viewerCap30Fps) {
+    const now = performance.now();
+    if (now - lastViewerFrameRenderTime < 30) {
+      return; // Pula a decodificação e desenho para poupar CPU
+    }
+    lastViewerFrameRenderTime = now;
+  }
 
   dom.preview.classList.add('hidden');
   dom.canvasPreview.classList.remove('hidden');
@@ -1516,13 +1531,42 @@ function renderIncomingFrame(frameData) {
   const img = new Image();
   img.onload = () => {
     const canvas = dom.canvasPreview;
-    if (canvas.width !== img.width || canvas.height !== img.height) {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      dom.statResolution.textContent = `${img.width}x${img.height}`;
+    let targetW = img.width;
+    let targetH = img.height;
+
+    // 2. Redução de resolução selecionada pelo espectador
+    if (state.viewerQuality === '360p') {
+      const maxW = 640;
+      if (img.width > maxW) {
+        const scale = maxW / img.width;
+        targetW = maxW;
+        targetH = Math.round(img.height * scale);
+      }
+    } else if (state.viewerQuality === '480p') {
+      const maxW = 854;
+      if (img.width > maxW) {
+        const scale = maxW / img.width;
+        targetW = maxW;
+        targetH = Math.round(img.height * scale);
+      }
+    } else if (state.viewerQuality === '720p') {
+      const maxW = 1280;
+      if (img.width > maxW) {
+        const scale = maxW / img.width;
+        targetW = maxW;
+        targetH = Math.round(img.height * scale);
+      }
     }
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const qSuffix = state.viewerQuality === 'auto' ? '' : ` (${state.viewerQuality.toUpperCase()})`;
+      dom.statResolution.textContent = `${targetW}x${targetH}${qSuffix}`;
+    }
+
+    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+    ctx.drawImage(img, 0, 0, targetW, targetH);
     state.fpsRenderedCount++;
   };
   img.src = frameData;
@@ -2265,6 +2309,73 @@ window.addEventListener('resize', checkPipMode);
 window.addEventListener('orientationchange', checkPipMode);
 document.addEventListener('DOMContentLoaded', checkPipMode);
 checkPipMode();
+
+// Seletor de Qualidade do Espectador
+const btnViewerQuality = document.getElementById('btnViewerQuality');
+const qualityDropdown = document.getElementById('qualityDropdown');
+const lblViewerQuality = document.getElementById('lblViewerQuality');
+const qualityOptions = document.querySelectorAll('.quality-option');
+const chkCap30Fps = document.getElementById('chkCap30Fps');
+
+function updateQualityUI() {
+  if (lblViewerQuality) {
+    if (state.viewerQuality === 'auto') {
+      lblViewerQuality.textContent = state.viewerCap30Fps ? 'Auto 30fps' : 'Auto';
+    } else {
+      lblViewerQuality.textContent = state.viewerCap30Fps ? `${state.viewerQuality.toUpperCase()} 30fps` : state.viewerQuality.toUpperCase();
+    }
+  }
+
+  qualityOptions.forEach((opt) => {
+    if (opt.getAttribute('data-quality') === state.viewerQuality) {
+      opt.classList.add('active');
+    } else {
+      opt.classList.remove('active');
+    }
+  });
+
+  if (chkCap30Fps) {
+    chkCap30Fps.checked = state.viewerCap30Fps;
+  }
+}
+
+if (btnViewerQuality && qualityDropdown) {
+  btnViewerQuality.addEventListener('click', (e) => {
+    e.stopPropagation();
+    qualityDropdown.classList.toggle('hidden');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#viewerQualityGroup')) {
+      qualityDropdown.classList.add('hidden');
+    }
+  });
+
+  qualityOptions.forEach((opt) => {
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const q = opt.getAttribute('data-quality');
+      if (q) {
+        state.viewerQuality = q;
+        localStorage.setItem('dodo_viewer_quality', q);
+        updateQualityUI();
+        qualityDropdown.classList.add('hidden');
+        log(`Qualidade de visualização alterada para: ${q.toUpperCase()}`, 'info');
+      }
+    });
+  });
+
+  if (chkCap30Fps) {
+    chkCap30Fps.addEventListener('change', (e) => {
+      state.viewerCap30Fps = e.target.checked;
+      localStorage.setItem('dodo_viewer_cap_30fps', state.viewerCap30Fps ? 'true' : 'false');
+      updateQualityUI();
+      log(`Limite de 30 FPS no espectador ${state.viewerCap30Fps ? 'ativado' : 'desativado'}`, 'info');
+    });
+  }
+
+  updateQualityUI();
+}
 
 // Inicialização
 detectVoiceChannelRoom();
