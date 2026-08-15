@@ -1220,9 +1220,6 @@ body.no-scroll {
   .host-profile-banner,
   .host-actions-bar,
   .custom-context-menu,
-  .modal-overlay,
-  .placeholder-tip,
-  #btnLobbyWantToStream,
   #btnWantToStream,
   #btnAudioTip,
   #audioTipBanner {
@@ -1273,6 +1270,9 @@ body.no-scroll {
     background: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   #preview,
@@ -1283,19 +1283,47 @@ body.no-scroll {
     border-radius: 0 !important;
   }
 
+  /* Placeholder Completo e Proporcional no Mini-Player */
   .video-placeholder {
-    padding: 6px !important;
-    gap: 4px !important;
+    padding: 10px !important;
+    gap: 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    width: 100% !important;
   }
 
   .video-placeholder .placeholder-icon-svg {
-    width: 24px !important;
-    height: 24px !important;
+    width: 28px !important;
+    height: 28px !important;
+    color: var(--accent-discord) !important;
   }
 
   .video-placeholder p {
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
     margin: 0 !important;
+    line-height: 1.25 !important;
+    max-width: 90% !important;
+  }
+
+  .placeholder-tip {
+    display: block !important;
+    font-size: 0.68rem !important;
+    color: var(--text-muted) !important;
+    margin: 0 !important;
+    max-width: 85% !important;
+  }
+
+  #btnLobbyWantToStream {
+    display: inline-flex !important;
+    padding: 6px 12px !important;
+    font-size: 0.75rem !important;
+    margin-top: 6px !important;
+    gap: 6px !important;
+    border-radius: 4px !important;
   }
 }
 
@@ -1307,8 +1335,6 @@ body.pip-mini-mode .video-floating-bar,
 body.pip-mini-mode .host-profile-banner,
 body.pip-mini-mode .host-actions-bar,
 body.pip-mini-mode .custom-context-menu,
-body.pip-mini-mode .modal-overlay,
-body.pip-mini-mode #btnLobbyWantToStream,
 body.pip-mini-mode #btnWantToStream,
 body.pip-mini-mode #btnAudioTip,
 body.pip-mini-mode #audioTipBanner {
@@ -1326,4 +1352,12 @@ body.pip-mini-mode .app-container {
   height: 100vh !important;
   width: 100vw !important;
   background: #000000 !important;
+}
+
+body.pip-mini-mode .placeholder-tip {
+  display: block !important;
+}
+
+body.pip-mini-mode #btnLobbyWantToStream {
+  display: inline-flex !important;
 }
