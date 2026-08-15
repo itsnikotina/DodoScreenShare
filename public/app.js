@@ -226,14 +226,15 @@ let discordSdk = null;
 const sessionStartTime = Math.floor(Date.now() / 1000);
 
 async function setupDiscordRichPresence() {
-  const isIframe = window.self !== window.top;
+  const isIframe = window.self !== window.top || window.location.hostname.includes('discordsays.com');
   if (!isIframe) return;
 
   try {
-    if (window.Discord && window.Discord.DiscordSDK) {
-      discordSdk = new window.Discord.DiscordSDK('787371101177118750');
+    const SDKClass = window.DiscordSDK || (window.Discord && window.Discord.DiscordSDK) || (window.discord && window.discord.DiscordSDK);
+    if (SDKClass) {
+      discordSdk = new SDKClass('787371101177118750');
       await discordSdk.ready();
-      log('Discord Embedded App SDK pronto!', 'success');
+      log('Discord Embedded App SDK pronto e ativo!', 'success');
       updateDiscordPresence('Assistindo tela via Dodo', 'Dodo Screen Share');
 
       // Sincroniza todos os participantes da chamada do Discord
@@ -241,8 +242,12 @@ async function setupDiscordRichPresence() {
       try {
         discordSdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', syncVoiceChannelParticipants);
       } catch (e) {}
+    } else {
+      console.log('[DiscordSDK] SDKClass não encontrada no window');
     }
-  } catch (err) {}
+  } catch (err) {
+    console.warn('[DiscordSDK] Erro ao inicializar SDK:', err);
+  }
 }
 
 async function syncVoiceChannelParticipants() {
@@ -280,7 +285,23 @@ async function syncVoiceChannelParticipants() {
   }
 }
 
-function updateDiscordPresence(details, stateText) {
+function sendDiscordRpc(cmd, args) {
+  if (window.parent && window.parent !== window) {
+    const nonce = Math.random().toString(36).substring(2);
+    window.parent.postMessage(JSON.stringify({
+      cmd: cmd,
+      args: args,
+      nonce: nonce
+    }), '*');
+    window.parent.postMessage({
+      cmd: cmd,
+      args: args,
+      nonce: nonce
+    }, '*');
+  }
+}
+
+async function updateDiscordPresence(details, stateText) {
   const isHosting = state.isHosting;
   const isWatching = !!state.watchingHostId;
 
@@ -289,11 +310,11 @@ function updateDiscordPresence(details, stateText) {
 
   if (!finalDetails) {
     if (isHosting) {
-      finalDetails = 'Transmitindo tela via Dodo';
+      finalDetails = 'Transmitindo tela';
       finalState = 'Dodo Screen Share';
     } else if (isWatching && state.watchingProfile) {
       finalDetails = `Assistindo ${state.watchingProfile.username}`;
-      finalState = 'via Dodo Screen Share';
+      finalState = 'Dodo Screen Share';
     } else {
       finalDetails = 'Assistindo tela via Dodo';
       finalState = 'via Dodo';
@@ -302,20 +323,26 @@ function updateDiscordPresence(details, stateText) {
 
   document.title = isHosting ? '🔴 Transmitindo - Dodo' : (isWatching ? `📺 ${finalDetails} - Dodo` : 'Dodo Screen Share');
 
-  if (discordSdk && discordSdk.commands && discordSdk.commands.setActivity) {
+  const activityPayload = {
+    details: finalDetails,
+    state: finalState,
+    timestamps: { start: sessionStartTime },
+    assets: {
+      large_image: state.userProfile?.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png',
+      large_text: 'Dodo Screen Share'
+    }
+  };
+
+  // Envia via RPC nativo do Discord Client
+  sendDiscordRpc('SET_ACTIVITY', { activity: activityPayload });
+
+  if (discordSdk && discordSdk.commands && typeof discordSdk.commands.setActivity === 'function') {
     try {
-      discordSdk.commands.setActivity({
-        activity: {
-          details: finalDetails,
-          state: finalState,
-          timestamps: { start: sessionStartTime },
-          assets: {
-            large_image: state.userProfile?.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png',
-            large_text: 'Dodo Screen Share'
-          }
-        }
-      });
-    } catch (e) {}
+      await discordSdk.commands.setActivity({ activity: activityPayload });
+      log(`Rich Presence atualizado: ${finalDetails}`, 'info');
+    } catch (e) {
+      console.warn('[DiscordSDK] setActivity erro:', e);
+    }
   }
 }
 
