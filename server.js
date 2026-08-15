@@ -56,6 +56,16 @@ app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
+// Rota de Configuração Dinâmica para Clientes Web / Discord Activity
+app.get('/api/config', (req, res) => {
+  const forwardedProto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+  const forwardedHost = req.headers['x-forwarded-host'] || req.get('host');
+  const detectedUrl = process.env.PUBLIC_URL || `${forwardedProto}://${forwardedHost}`;
+  res.json({
+    publicUrl: detectedUrl.endsWith('/') ? detectedUrl : `${detectedUrl}/`
+  });
+});
+
 // ==========================================
 // Rotas de Discord OAuth2
 // ==========================================
@@ -353,9 +363,14 @@ wss.on('connection', (ws, req) => {
 
   console.log(`[WebSocket] Cliente conectado: ID ${peerId} (${req.socket.remoteAddress})`);
 
+  const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
+  const forwardedHost = req.headers['x-forwarded-host'] || req.headers.host;
+  const detectedUrl = process.env.PUBLIC_URL || `${forwardedProto}://${forwardedHost}`;
+
   ws.send(JSON.stringify({
     type: 'connected',
-    peerId: peerId
+    peerId: peerId,
+    publicUrl: detectedUrl.endsWith('/') ? detectedUrl : `${detectedUrl}/`
   }));
 
   ws.on('message', (message) => {

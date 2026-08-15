@@ -462,6 +462,10 @@ async function handleSignalMessage(msg) {
   switch (msg.type) {
     case 'connected':
       state.peerId = msg.peerId;
+      if (msg.publicUrl) {
+        state.serverPublicUrl = msg.publicUrl;
+        if (dom.streamUrlInput) dom.streamUrlInput.value = getPublicPanelUrl();
+      }
       break;
 
     // Confirmação de entrada na sala
@@ -1920,14 +1924,26 @@ dom.btnClearLogs.addEventListener('click', () => {
 });
 
 // Modal de Guia de Transmissão (Quero Transmitir)
-const PUBLIC_STREAM_PANEL_URL = 'https://beverly-discusses-souls-bug.trycloudflare.com/';
-
 function getPublicPanelUrl() {
-  if (window.location.origin.includes('discordsays.com')) {
-    return PUBLIC_STREAM_PANEL_URL;
+  if (state.serverPublicUrl && !state.serverPublicUrl.includes('discordsays.com')) {
+    return state.serverPublicUrl;
   }
-  return `${window.location.origin}/`;
+  if (!window.location.origin.includes('discordsays.com')) {
+    return `${window.location.origin}/`;
+  }
+  return state.serverPublicUrl || `${window.location.origin}/`;
 }
+
+// Busca a URL dinâmica do servidor imediatamente
+fetch('/api/config')
+  .then((res) => res.json())
+  .then((data) => {
+    if (data && data.publicUrl) {
+      state.serverPublicUrl = data.publicUrl;
+      if (dom.streamUrlInput) dom.streamUrlInput.value = getPublicPanelUrl();
+    }
+  })
+  .catch(() => {});
 
 function openStreamModal() {
   const targetUrl = getPublicPanelUrl();
