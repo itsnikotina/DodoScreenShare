@@ -349,9 +349,45 @@ function detectVoiceChannelRoom() {
 // ==========================================
 // Discord OAuth2 Auth Manager
 // ==========================================
-function initDiscordAuth() {
-  const urlParams = new URLSearchParams(window.location.search);
+async function initDiscordAuth() {
+  // 1. Tratamento de Implicit Grant OAuth2 (Hash Fragment: #access_token=...)
+  if (window.location.hash && window.location.hash.includes('access_token=')) {
+    try {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      if (accessToken) {
+        log('Autenticando perfil com Discord...', 'info');
+        const res = await fetch('https://discord.com/api/v10/users/@me', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        });
+        if (res.ok) {
+          const u = await res.json();
+          let avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
+          if (u.avatar) {
+            avatarUrl = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`;
+          }
+          const profile = {
+            id: u.id,
+            username: u.global_name || u.username,
+            avatarUrl: avatarUrl
+          };
+          localStorage.setItem('discord_user', JSON.stringify(profile));
+          state.userProfile = profile;
+          log(`Usuário autenticado com sucesso: ${profile.username}`, 'success');
 
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      }
+    } catch (err) {
+      log(`Erro na autenticação direta: ${err.message}`, 'error');
+    }
+  }
+
+  // 2. Tratamento de Code / Query Params tradicionais
+  const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.has('discord_user')) {
     try {
       const user = JSON.parse(decodeURIComponent(urlParams.get('discord_user')));
@@ -383,7 +419,12 @@ function initDiscordAuth() {
       dom.userNameSmall.textContent = state.userProfile.username || 'Usuário Discord';
     }
   } else {
-    if (dom.btnDiscordLogin) dom.btnDiscordLogin.classList.remove('hidden');
+    if (dom.btnDiscordLogin) {
+      dom.btnDiscordLogin.classList.remove('hidden');
+      const originUrl = window.location.origin.includes('discordsays.com') ? 'https://dodoscreenshare.onrender.com/' : `${window.location.origin}/`;
+      const redirectUri = encodeURIComponent(originUrl);
+      dom.btnDiscordLogin.href = `https://discord.com/oauth2/authorize?client_id=787371101177118750&response_type=token&redirect_uri=${redirectUri}&scope=identify`;
+    }
     if (dom.userProfileBadge) dom.userProfileBadge.classList.add('hidden');
   }
 }
