@@ -36,7 +36,17 @@ const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '787371101177118750';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 
 // Servir arquivos estáticos da pasta /public
-app.use(express.static(path.join(__dirname, 'public')));
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  maxAge: 0
+}));
 app.use(express.json());
 
 // Headers de segurança e CORS
