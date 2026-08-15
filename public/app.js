@@ -237,6 +237,34 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function copyTextToClipboard(text) {
+  return new Promise((resolve) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      textarea.setAttribute('readonly', '');
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, 99999);
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (successful) return resolve(true);
+    } catch (err) {}
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => resolve(true))
+        .catch(() => resolve(false));
+    } else {
+      resolve(false);
+    }
+  });
+}
+
 // ==========================================
 // Discord Embedded App SDK & Rich Presence (Dodo)
 // ==========================================
@@ -258,6 +286,12 @@ class EmbeddedDiscordSDK {
       if (typeof msg === 'string') {
         try { msg = JSON.parse(msg); } catch (err) {}
       }
+      if (msg && (msg.cmd || msg.evt || msg.nonce)) {
+        console.log('[Discord Raw PostMessage]', msg);
+        if (msg.cmd || msg.evt) {
+          log(`[RPC In] cmd=${msg.cmd || ''} evt=${msg.evt || ''} nonce=${msg.nonce || ''}`, 'info');
+        }
+      }
       if (msg && msg.evt && this._listeners.has(msg.evt)) {
         const callbacks = this._listeners.get(msg.evt);
         callbacks.forEach((cb) => {
@@ -268,6 +302,7 @@ class EmbeddedDiscordSDK {
   }
 
   async ready() {
+    log('Enviando handshake READY para Discord...', 'info');
     return this._rpc('READY', {});
   }
 
@@ -282,18 +317,21 @@ class EmbeddedDiscordSDK {
   _rpc(cmd, args) {
     return new Promise((resolve) => {
       const nonce = Math.random().toString(36).substring(2);
+      log(`[RPC Out] cmd=${cmd} nonce=${nonce}`, 'info');
+
       const onResponse = (e) => {
         let msg = e.data;
         if (typeof msg === 'string') {
           try { msg = JSON.parse(msg); } catch (err) {}
         }
-        if (msg && msg.nonce === nonce) {
+        if (msg && (msg.nonce === nonce || (msg.data && msg.data.nonce === nonce))) {
           window.removeEventListener('message', onResponse);
+          log(`[RPC Resposta] cmd=${cmd} data=${JSON.stringify(msg.data || msg)}`, 'success');
           if (msg.evt === 'ERROR') {
             console.warn('[DiscordSDK RPC] Erro:', msg.data);
             resolve(msg.data || null);
           } else {
-            resolve(msg.data || {});
+            resolve(msg.data || msg || {});
           }
         }
       };
@@ -306,7 +344,7 @@ class EmbeddedDiscordSDK {
       setTimeout(() => {
         window.removeEventListener('message', onResponse);
         resolve({});
-      }, 5000);
+      }, 6000);
     });
   }
 }
@@ -2237,13 +2275,18 @@ if (btnCopyActivityLogs) {
     const text = state.logHistory
       .map((e) => `[${e.timestamp}] [${e.category.toUpperCase()}] ${e.message}`)
       .join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      btnCopyActivityLogs.textContent = '✅ Copiado!';
+    const ok = await copyTextToClipboard(text);
+    if (ok) {
+      btnCopyActivityLogs.textContent = '✅ Copiado com Sucesso!';
       setTimeout(() => {
         btnCopyActivityLogs.innerHTML = '<iconify-icon icon="lucide:copy" width="14"></iconify-icon> Copiar Logs';
       }, 2000);
-    } catch (e) {}
+    } else {
+      btnCopyActivityLogs.textContent = '⚠️ Selecione e dê Ctrl+C';
+      setTimeout(() => {
+        btnCopyActivityLogs.innerHTML = '<iconify-icon icon="lucide:copy" width="14"></iconify-icon> Copiar Logs';
+      }, 2500);
+    }
   });
 }
 
