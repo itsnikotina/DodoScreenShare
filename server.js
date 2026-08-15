@@ -209,6 +209,8 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     console.error('[Discord OAuth Debug] Exceção interna no callback:', err);
     res.redirect(`/?auth_error=${encodeURIComponent(err.message)}`);
   }
+});
+
 // Endpoint para troca de token do Embedded App SDK (Rich Presence)
 app.post('/api/token', async (req, res) => {
   const { code } = req.body;
