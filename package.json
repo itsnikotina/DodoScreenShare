@@ -1,0 +1,27 @@
+{
+  "name": "discord-activity-webrtc-screenshare",
+  "version": "1.0.0",
+  "description": "PoC para teste de compartilhamento de tela com áudio (WebRTC) em Discord Activities",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --watch server.js",
+    "dev": "node --watch server.js",
+    "tunnel:cloudflared": "cloudflared tunnel --url http://localhost:3000",
+    "tunnel:localtunnel": "npx localtunnel --port 3000",
+    "tunnel:ngrok": "ngrok http 3000"
+  },
+  "keywords": [
+    "discord-activity",
+    "webrtc",
+    "getdisplaymedia",
+    "screen-sharing",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

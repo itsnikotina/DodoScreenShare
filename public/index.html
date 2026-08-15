@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dodo Screen Share - Multi-Stream WebRTC & Discord Activity</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Iconify Icons CDN -->
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+</head>
+<body>
+  <div class="app-container" id="appContainer">
+    <!-- Header Limpo e Moderno (Ocultado em Activity Mode) -->
+    <header class="app-header" id="appHeader">
+      <div class="header-brand">
+        <div class="status-dot connected" id="wsStatusDot" title="Status da Conexão"></div>
+        <div class="brand-text">
+          <iconify-icon icon="solar:screen-share-bold-duotone" class="brand-icon" width="24"></iconify-icon>
+          <h1>Dodo Screen Share</h1>
+          <span class="room-pill" id="diagRoomName">Canal Principal</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <!-- Login Discord Host -->
+        <div class="auth-wrapper" id="authWrapper">
+          <a href="/api/auth/discord/login" id="btnDiscordLogin" class="btn btn-discord btn-sm">
+            <iconify-icon icon="ic:baseline-discord" width="18"></iconify-icon> Entrar com Discord
+          </a>
+          <div id="userProfileBadge" class="user-profile-badge hidden">
+            <img id="userAvatarSmall" class="user-avatar-sm" src="" alt="Avatar">
+            <span id="userNameSmall" class="user-name-sm">---</span>
+            <button id="btnLogout" class="btn-logout" title="Sair da conta">
+              <iconify-icon icon="lucide:x" width="12"></iconify-icon>
+            </button>
+          </div>
+        </div>
+
+        <button id="btnWantToStream" class="btn btn-primary btn-sm" title="Saiba como transmitir sua tela">
+          <iconify-icon icon="lucide:screen-share" width="14"></iconify-icon>
+          <span>Quero Transmitir</span>
+        </button>
+        <button id="btnToggleFocus" class="btn btn-secondary btn-sm" title="Ocultar painéis e focar no player">
+          <iconify-icon icon="lucide:sparkles" width="14"></iconify-icon> Modo Foco
+        </button>
+        <button id="btnFullscreen" class="btn btn-accent btn-sm" title="Tela Cheia (F)">
+          <iconify-icon icon="lucide:maximize-2" width="14"></iconify-icon> Tela Cheia
+        </button>
+      </div>
+    </header>
+
+    <!-- Grid Principal -->
+    <main class="main-grid" id="mainGrid">
+      <!-- Coluna Esquerda: Player de Vídeo e Transmissão -->
+      <section class="player-section card" id="playerSection">
+        
+        <!-- Barra de Ações do Host -->
+        <div class="host-actions-bar" id="hostActionsBar">
+          <button id="btnHost" class="btn btn-primary btn-lg">
+            <iconify-icon icon="lucide:screen-share" width="20"></iconify-icon>
+            Compartilhar Minha Tela
+          </button>
+          <button id="btnStop" class="btn btn-danger btn-lg hidden" disabled>
+            <iconify-icon icon="lucide:screen-share-off" width="20"></iconify-icon>
+            Parar Transmissão
+          </button>
+          <button id="btnChangeWindow" class="btn btn-secondary btn-lg hidden" title="Mudar de janela ou tela sem desconectar a live">
+            <iconify-icon icon="lucide:arrow-left-right" width="18"></iconify-icon>
+            Trocar Janela
+          </button>
+
+          <!-- Seletores de Qualidade (Resolução & FPS) -->
+          <div class="stream-quality-controls" id="streamQualityControls">
+            <div class="quality-select-group">
+              <iconify-icon icon="lucide:monitor" width="14"></iconify-icon>
+              <select id="selectResolution" class="quality-select" title="Qualidade da Resolução">
+                <option value="1080p">1080p (FHD)</option>
+                <option value="720p" selected>720p (HD)</option>
+                <option value="480p">480p (SD)</option>
+              </select>
+            </div>
+
+            <div class="quality-select-group">
+              <iconify-icon icon="lucide:gauge" width="14"></iconify-icon>
+              <select id="selectFps" class="quality-select" title="Taxa de Quadros (FPS)">
+                <option value="60">60 FPS</option>
+                <option value="30" selected>30 FPS</option>
+                <option value="15">15 FPS</option>
+              </select>
+            </div>
+
+            <button id="btnAudioTip" class="btn btn-secondary btn-sm" title="Dica para evitar retorno do áudio do Discord" style="padding: 4px 8px; font-size: 0.75rem;">
+              <iconify-icon icon="lucide:help-circle" width="14"></iconify-icon>
+              <span>Dica de Áudio</span>
+            </button>
+          </div>
+
+          <!-- VU Meter Compacto no Painel do Host -->
+          <div class="host-vu-compact" id="hostVuCompact">
+            <span class="vu-title">VU Áudio</span>
+            <div class="vu-bar-mini-wrapper">
+              <div class="vu-bar-mini" id="audioVuBar"></div>
+            </div>
+            <span class="vu-db-text" id="audioDbText">-inf dB</span>
+          </div>
+        </div>
+
+        <!-- Banner Explicativo de Dica de Áudio (Anti-Eco) -->
+        <div class="audio-tip-banner hidden" id="audioTipBanner">
+          <div class="tip-banner-header">
+            <div class="tip-title">
+              <iconify-icon icon="lucide:volume-2" width="16" style="color: var(--accent-discord);"></iconify-icon>
+              <span>Como Transmitir Jogos e Vídeos Sem Retorno do Discord:</span>
+            </div>
+            <button class="btn-close-tip" id="btnCloseAudioTip" title="Fechar">
+              <iconify-icon icon="lucide:x" width="14"></iconify-icon>
+            </button>
+          </div>
+          <ul class="tip-list">
+            <li><strong>🪟 No Windows / Mac:</strong> Na janela de seleção ao compartilhar tela, escolha a aba <strong>"Janela"</strong> (seu jogo) ou <strong>"Aba do Navegador"</strong>. O áudio do Discord é excluído automaticamente!</li>
+            <li><strong>🐧 No Linux / Firefox:</strong> Para vídeos, compartilhe por <strong>"Aba"</strong>. Para jogos, utilize o <em>Controle de Volume (pavucontrol)</em> para direcionar a gravação apenas para o som do jogo.</li>
+          </ul>
+        </div>
+
+        <!-- Container do Player com Suporte a Palco (Foco) e Galeria da Call -->
+        <div class="video-wrapper" id="videoWrapper">
+          <video id="preview" autoplay playsinline muted></video>
+          <canvas id="canvasPreview" class="hidden"></canvas>
+
+          <!-- Banner do Streamer Ativo no Topo Esquerdo -->
+          <div class="host-profile-banner hidden" id="hostProfileBanner">
+            <img id="hostAvatar" class="host-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar">
+            <div class="host-info">
+              <span id="hostName" class="host-name">Transmitindo</span>
+              <span class="live-badge"><span class="live-dot"></span> AO VIVO</span>
+            </div>
+          </div>
+
+          <!-- Placeholder Quando Não Há Transmissão Focada -->
+          <div class="video-placeholder" id="videoPlaceholder">
+            <iconify-icon icon="solar:broadcast-bold-duotone" class="placeholder-icon-svg" width="56"></iconify-icon>
+            <p id="placeholderText">Aguardando membros ou transmissões nesta chamada...</p>
+            <span class="placeholder-tip" id="placeholderTip">As transmissões iniciadas aparecerão automaticamente aqui!</span>
+            <button class="btn btn-primary btn-md" id="btnLobbyWantToStream" style="margin-top: 14px; pointer-events: auto; z-index: 10; cursor: pointer;">
+              <iconify-icon icon="solar:screen-share-bold-duotone" width="18"></iconify-icon>
+              <span>Compartilhar Minha Tela</span>
+            </button>
+          </div>
+
+          <!-- Controles Flutuantes no Topo Direito (Transmitir, Volume e Tela Cheia) -->
+          <div class="video-floating-bar" id="videoFloatingBar">
+            <button id="btnFloatingWantToStream" class="btn-floating-pill" title="Compartilhar minha tela">
+              <iconify-icon icon="lucide:screen-share" width="14"></iconify-icon>
+              <span>Transmitir</span>
+            </button>
+            <div class="volume-control-group" id="volumeControlGroup">
+              <button id="btnMute" class="btn-floating" title="Mutar / Desmutar (M)">
+                <iconify-icon icon="lucide:volume-2" id="iconMute" width="18"></iconify-icon>
+              </button>
+              <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100" title="Ajustar Volume">
+              <span id="volumePercent" class="volume-percent">100%</span>
+            </div>
+            <button id="btnFloatingFullscreen" class="btn-floating" title="Alternar Tela Cheia (F)">
+              <iconify-icon icon="lucide:maximize-2" width="18"></iconify-icon>
+            </button>
+          </div>
+
+          <!-- Galeria de Membros e Streams (Discord Call Layout - Grade Inferior) -->
+          <div class="call-gallery-shelf" id="callGalleryShelf">
+            <div class="gallery-cards-row" id="galleryCardsRow">
+              <!-- Cards de streams e membros inseridos dinamicamente -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Estatísticas da Live -->
+        <div class="stats-footer">
+          <div class="stat-box">
+            <span class="stat-label">Status:</span>
+            <span class="stat-value" id="statRole">Standby</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Taxa / FPS:</span>
+            <span class="stat-value" id="statFps">0 fps</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Resolução:</span>
+            <span class="stat-value" id="statResolution">---</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Espectadores:</span>
+            <span class="stat-value" id="statViewers">0 (🎮 0 | 🌐 0)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Coluna Direita: Quem está assistindo & Logs -->
+      <section class="logs-section card" id="logsSection">
+        
+        <!-- Card de Espectadores da Minha Tela com Separação Discord / Web -->
+        <div class="viewers-panel card-inner" id="viewersPanel">
+          <div class="card-header-inner">
+            <h3>👥 Quem está assistindo sua tela (<span id="myViewersCount">0</span>)</h3>
+            <div class="viewers-badges">
+              <span class="badge-tag discord-badge" id="badgeDiscordCount">
+                <iconify-icon icon="ic:baseline-discord" width="12"></iconify-icon> Discord: 0
+              </span>
+              <span class="badge-tag web-badge" id="badgeWebCount">
+                <iconify-icon icon="lucide:globe" width="12"></iconify-icon> Web: 0
+              </span>
+            </div>
+          </div>
+          <div class="viewers-list" id="myViewersList">
+            <p class="empty-viewers-msg">Nenhum espectador assistindo no momento.</p>
+          </div>
+        </div>
+
+        <!-- Console de Diagnóstico -->
+        <div class="card-header">
+          <div class="log-title-wrap">
+            <h2>Diagnóstico da Conexão</h2>
+            <span class="badge badge-subtle" id="logCount">0 eventos</span>
+          </div>
+          <div class="log-actions">
+            <button id="btnCopyLogs" class="btn btn-secondary btn-xs" title="Copiar logs">
+              <iconify-icon icon="lucide:copy" width="12"></iconify-icon> Copiar
+            </button>
+            <button id="btnClearLogs" class="btn btn-secondary btn-xs" title="Limpar logs">
+              <iconify-icon icon="lucide:trash-2" width="12"></iconify-icon> Limpar
+            </button>
+          </div>
+        </div>
+
+        <div class="logs-container" id="logs">
+          <!-- Logs inseridos dinamicamente -->
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer" id="appFooter">
+      <p>Dodo Screen Share • Transmissão em Tempo Real para Discord Activity</p>
+    </footer>
+  </div>
+
+  <!-- Menu de Contexto (Botão Direito no Player) -->
+  <div class="custom-context-menu hidden" id="streamContextMenu">
+    <div class="context-menu-item item-danger" id="ctxStopWatching">
+      <iconify-icon icon="lucide:eye-off" width="16"></iconify-icon>
+      <span>Parar de assistir transmissão</span>
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item" id="ctxToggleMute">
+      <iconify-icon icon="lucide:volume-2" id="ctxMuteIcon" width="16"></iconify-icon>
+      <span id="ctxMuteText">Mutar transmissão</span>
+    </div>
+    <div class="context-menu-item" id="ctxFullscreen">
+      <iconify-icon icon="lucide:maximize-2" width="16"></iconify-icon>
+      <span>Tela cheia</span>
+    </div>
+  </div>
+
+  <!-- Modal Explicativo: Como Transmitir Tela -->
+  <div class="modal-overlay hidden" id="modalStreamGuide">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <iconify-icon icon="solar:screen-share-bold-duotone" width="24" style="color: var(--accent-discord);"></iconify-icon>
+          <h3>Como Transmitir Sua Tela</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseStreamModal" title="Fechar">
+          <iconify-icon icon="lucide:x" width="18"></iconify-icon>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Para compartilhar sua tela, jogos ou vídeos com som e alta performance, acesse o painel pelo seu navegador:
+        </p>
+        <div class="url-copy-container">
+          <input type="text" id="streamUrlInput" class="url-input" readonly value="https://beverly-discusses-souls-bug.trycloudflare.com/">
+          <button class="btn btn-primary btn-sm" id="btnCopyStreamUrl">
+            <iconify-icon icon="lucide:copy" width="14"></iconify-icon> Copiar Link
+          </button>
+        </div>
+        <div id="copyFeedbackMsg" class="copy-feedback-msg hidden" style="color: #23a55a; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
+          <iconify-icon icon="lucide:check-circle-2" width="14"></iconify-icon>
+          <span>Link copiado! Cole no seu navegador (Ctrl + V) para transmitir.</span>
+        </div>
+        <div class="modal-actions-row">
+          <button class="btn btn-secondary btn-md" id="btnDismissStreamModal" style="width: 100%;">
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Discord Embedded App SDK para Rich Presence -->
+  <script src="https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.1.0/output/index.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

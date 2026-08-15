@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Privacidade - PoC Discord Screen Share</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #181b24;
+      --border: #2d3345;
+      --text: #f2f3f5;
+      --text-muted: #949ba4;
+      --accent: #5865f2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; color: #fff; }
+    .updated { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px; }
+    h2 { font-size: 1.2rem; margin: 24px 0 12px; color: var(--accent); }
+    p, li { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 12px; }
+    ul { padding-left: 20px; margin-bottom: 16px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back-link { display: inline-block; margin-top: 24px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Política de Privacidade</h1>
+    <p class="updated">Última atualização: 15 de agosto de 2026</p>
+
+    <h2>1. Informações que Coletamos</h2>
+    <p>A sua privacidade é prioridade. Nossa aplicação coleta e processa apenas os dados estritamente necessários para a funcionalidade de transmissão:</p>
+    <ul>
+      <li><strong>Dados de Autenticação Discord (Opcional):</strong> Ao realizar login com o Discord OAuth2, obtemos seu identificador de usuário (`User ID`), nome de exibição (`Username`) e URL do avatar para exibição no overlay da live. Não coletamos nem armazenamos senhas, e-mails ou mensagens.</li>
+      <li><strong>Dados de Transmissão (Vídeo e Áudio):</strong> Os fluxos de vídeo e áudio capturados durante o compartilhamento de tela são transmitidos em tempo real via conexões peer-to-peer (WebRTC) ou repassados temporariamente na memória RAM via WebSocket. <strong>Nenhum vídeo ou áudio é gravado, armazenado em disco ou salvo em bancos de dados.</strong></li>
+    </ul>
+
+    <h2>2. Como Usamos as Informações</h2>
+    <p>Os dados processados são utilizados exclusivamente para:</p>
+    <ul>
+      <li>Estabelecer e manter a conexão de transmissão entre o transmissor (Host) e os espectadores (Viewers).</li>
+      <li>Exibir o nome e avatar do apresentador na interface do player de transmissão.</li>
+    </ul>
+
+    <h2>3. Compartilhamento de Dados</h2>
+    <p>Não vendemos, não alugamos e não compartilhamos nenhum dado de usuário com terceiros ou anunciantes.</p>
+
+    <h2>4. Armazenamento e Segurança</h2>
+    <p>Todas as comunicações utilizam protocolos seguros e criptografados (HTTPS e WSS). Dados temporários de sessão são eliminados automaticamente assim que a conexão é encerrada.</p>
+
+    <h2>5. Contato</h2>
+    <p>Para dúvidas sobre esta política de privacidade, entre em contato através dos canais de suporte do desenvolvedor no Discord.</p>
+
+    <a href="/" class="back-link">← Voltar para a Aplicação</a>
+  </div>
+</body>
+</html>
