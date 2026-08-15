@@ -266,133 +266,8 @@ function copyTextToClipboard(text) {
 }
 
 // ==========================================
-// Discord Embedded App SDK & Rich Presence (Dodo)
-// Protocolo Oficial Discord RPC (Array Opcode Specification)
+// Discord Embedded App SDK Oficial & Rich Presence (Dodo)
 // ==========================================
-class EmbeddedDiscordSDK {
-  constructor(clientId) {
-    this.clientId = clientId;
-    const urlParams = new URLSearchParams(window.location.search);
-    this.frameId = urlParams.get('frame_id') || '';
-    this.instanceId = urlParams.get('instance_id') || '';
-    this.platform = urlParams.get('platform') || 'desktop';
-    this.source = (window.parent && window.parent.opener) || window.parent;
-    this.isReady = false;
-    this.pending = new Map();
-    this.listeners = new Map();
-
-    this.commands = {
-      authorize: (args) => this.sendCommand('AUTHORIZE', args),
-      authenticate: (args) => this.sendCommand('AUTHENTICATE', args),
-      setActivity: (args) => this.sendCommand('SET_ACTIVITY', args),
-      getInstanceConnectedParticipants: (args) => this.sendCommand('GET_INSTANCE_CONNECTED_PARTICIPANTS', args || {})
-    };
-
-    window.addEventListener('message', (event) => {
-      if (!event.data) return;
-
-      // Trata mensagens no formato oficial do Discord SDK [Opcode, Data]
-      if (Array.isArray(event.data)) {
-        const [opcode, data] = event.data;
-
-        // Opcode 0 = HANDSHAKE / READY
-        if (opcode === 0) {
-          this.isReady = true;
-          log('🎉 Discord Handshake concluído com sucesso!', 'success');
-          if (this._onReady) this._onReady();
-        }
-
-        // Opcode 1 = FRAME (Command Response / Event)
-        if (opcode === 1 && data) {
-          log(`[RPC In] cmd=${data.cmd || ''} evt=${data.evt || ''} nonce=${data.nonce || ''}`, 'info');
-
-          if (data.nonce && this.pending.has(data.nonce)) {
-            const { resolve, reject } = this.pending.get(data.nonce);
-            this.pending.delete(data.nonce);
-            if (data.evt === 'ERROR') {
-              console.warn('[DiscordSDK RPC Error]', data.data);
-              reject(data.data);
-            } else {
-              resolve(data.data || data);
-            }
-          }
-
-          if (data.evt && this.listeners.has(data.evt)) {
-            this.listeners.get(data.evt).forEach((cb) => cb(data.data));
-          }
-        }
-      }
-    });
-
-    this._handshake();
-  }
-
-  _handshake() {
-    const payload = [
-      0, // HANDSHAKE
-      {
-        v: 1,
-        encoding: 'json',
-        client_id: this.clientId,
-        frame_id: this.frameId,
-        sdk_version: '2.5.0'
-      }
-    ];
-    log('Enviando handshake oficial [0, HANDSHAKE] para Discord...', 'info');
-    if (this.source) {
-      this.source.postMessage(payload, '*');
-    }
-  }
-
-  async ready() {
-    if (this.isReady) return;
-    return new Promise((resolve) => {
-      this._onReady = resolve;
-      setTimeout(() => {
-        this.isReady = true;
-        resolve();
-      }, 2500);
-    });
-  }
-
-  subscribe(evt, callback) {
-    if (!this.listeners.has(evt)) {
-      this.listeners.set(evt, []);
-      this.sendCommand('SUBSCRIBE', { evt });
-    }
-    this.listeners.get(evt).push(callback);
-  }
-
-  sendCommand(cmd, args) {
-    return new Promise((resolve, reject) => {
-      const nonce = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-      this.pending.set(nonce, { resolve, reject });
-
-      const payload = [
-        1, // FRAME
-        {
-          cmd: cmd,
-          args: args,
-          nonce: nonce
-        }
-      ];
-
-      log(`[RPC Out] cmd=${cmd} nonce=${nonce}`, 'info');
-      if (this.source) {
-        this.source.postMessage(payload, '*');
-      }
-
-      setTimeout(() => {
-        if (this.pending.has(nonce)) {
-          this.pending.delete(nonce);
-          log(`⚠️ Timeout RPC cmd=${cmd}`, 'warn');
-          resolve({});
-        }
-      }, 7000);
-    });
-  }
-}
-
 let discordSdk = null;
 const sessionStartTime = Math.floor(Date.now() / 1000);
 
@@ -404,56 +279,62 @@ async function setupDiscordRichPresence() {
   }
 
   try {
-    log('🎮 Inicializando Discord Embedded SDK...', 'info');
-    discordSdk = new EmbeddedDiscordSDK('787371101177118750');
-    await discordSdk.ready();
-    log('✅ Discord Embedded App SDK conectado!', 'success');
+    log('🎮 Inicializando Discord Embedded SDK oficial v2.5.0...', 'info');
 
-    // 1. Autorização com o escopo oficial rpc.activities.write
-    try {
-      log('🔑 Solicitando autorização rpc.activities.write ao Discord...', 'info');
-      const authResult = await discordSdk.commands.authorize({
-        client_id: '787371101177118750',
-        response_type: 'code',
-        state: '',
-        prompt: 'none',
-        scope: ['identify', 'rpc.activities.write']
-      });
+    const SDKClass = (window.Discord && window.Discord.DiscordSDK) || window.DiscordSDK;
+    if (SDKClass) {
+      discordSdk = new SDKClass('787371101177118750');
+      await discordSdk.ready();
+      log('🎉 Discord SDK oficial pronto e conectado!', 'success');
 
-      console.log('[DiscordSDK] Resultado da autorização:', authResult);
-
-      if (authResult && authResult.code) {
-        log('🔄 Code recebido! Trocando por token de Rich Presence...', 'info');
-        const tokenRes = await fetch('/api/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: authResult.code })
+      // 1. Autorização com o escopo oficial rpc.activities.write
+      try {
+        log('🔑 Solicitando autorização rpc.activities.write ao Discord...', 'info');
+        const authResult = await discordSdk.commands.authorize({
+          client_id: '787371101177118750',
+          response_type: 'code',
+          state: '',
+          prompt: 'none',
+          scope: ['identify', 'rpc.activities.write']
         });
 
-        const tokenJson = await tokenRes.json();
-        console.log('[DiscordSDK] Resposta do /api/token:', tokenJson);
+        console.log('[DiscordSDK] Resultado da autorização:', authResult);
 
-        if (tokenRes.ok && tokenJson.access_token) {
-          await discordSdk.commands.authenticate({ access_token: tokenJson.access_token });
-          log('🎉 Rich Presence autenticado com sucesso no Discord!', 'success');
+        if (authResult && authResult.code) {
+          log('🔄 Code recebido! Trocando por token de Rich Presence...', 'info');
+          const tokenRes = await fetch('/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: authResult.code })
+          });
+
+          const tokenJson = await tokenRes.json();
+          console.log('[DiscordSDK] Resposta do /api/token:', tokenJson);
+
+          if (tokenRes.ok && tokenJson.access_token) {
+            await discordSdk.commands.authenticate({ access_token: tokenJson.access_token });
+            log('🎉 Rich Presence autenticado com sucesso no Discord!', 'success');
+          } else {
+            log(`⚠️ Falha na troca de token: ${tokenJson.error || tokenRes.status}`, 'warn');
+          }
         } else {
-          log(`⚠️ Falha na troca de token: ${tokenJson.error || tokenRes.status}`, 'warn');
+          log('⚠️ Discord não retornou code de autorização para Rich Presence.', 'warn');
         }
-      } else {
-        log('⚠️ Discord não retornou code de autorização para Rich Presence.', 'warn');
+      } catch (authErr) {
+        console.warn('[DiscordSDK] Autorização Rich Presence:', authErr);
+        log(`⚠️ Autorização Rich Presence: ${authErr.message || JSON.stringify(authErr)}`, 'warn');
       }
-    } catch (authErr) {
-      console.warn('[DiscordSDK] Autorização Rich Presence:', authErr);
-      log(`⚠️ Autorização Rich Presence: ${authErr.message || JSON.stringify(authErr)}`, 'warn');
+
+      updateDiscordPresence('Assistindo tela via Dodo', 'Dodo Screen Share');
+
+      // Sincroniza todos os participantes da chamada do Discord
+      syncVoiceChannelParticipants();
+      try {
+        discordSdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', syncVoiceChannelParticipants);
+      } catch (e) {}
+    } else {
+      log('⚠️ window.Discord.DiscordSDK não carregado.', 'warn');
     }
-
-    updateDiscordPresence('Assistindo tela via Dodo', 'Dodo Screen Share');
-
-    // Sincroniza todos os participantes da chamada do Discord
-    syncVoiceChannelParticipants();
-    try {
-      discordSdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', syncVoiceChannelParticipants);
-    } catch (e) {}
   } catch (err) {
     console.warn('[DiscordSDK] Erro ao inicializar SDK:', err);
     log(`❌ Erro no SDK do Discord: ${err.message}`, 'error');
