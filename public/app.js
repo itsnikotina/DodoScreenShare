@@ -1691,10 +1691,10 @@ if (dom.btnChangeWindow) {
   dom.btnChangeWindow.addEventListener('click', changeScreenSharingSource);
 }
 
-dom.btnFullscreen.addEventListener('click', toggleFullscreen);
-dom.btnFloatingFullscreen.addEventListener('click', toggleFullscreen);
-dom.btnToggleFocus.addEventListener('click', toggleFocusMode);
-dom.videoWrapper.addEventListener('dblclick', toggleFullscreen);
+if (dom.btnFullscreen) dom.btnFullscreen.addEventListener('click', toggleFullscreen);
+if (dom.btnFloatingFullscreen) dom.btnFloatingFullscreen.addEventListener('click', toggleFullscreen);
+if (dom.btnToggleFocus) dom.btnToggleFocus.addEventListener('click', toggleFocusMode);
+if (dom.videoWrapper) dom.videoWrapper.addEventListener('dblclick', toggleFocusMode);
 
 // ==========================================
 // Parar de Assistir e Menu de Contexto (Botão Direito)
