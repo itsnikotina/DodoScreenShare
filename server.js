@@ -95,25 +95,41 @@ app.get('/api/auth/discord/login', (req, res) => {
   }
 
   const redirectUri = getDiscordRedirectUri(req);
-  console.log(`[Discord OAuth] Iniciando login com redirect_uri: ${redirectUri}`);
+  console.log(`[Discord OAuth Debug] Iniciando login com client_id: ${DISCORD_CLIENT_ID} | redirect_uri: ${redirectUri}`);
 
   const authUrl = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=identify`;
   res.redirect(authUrl);
 });
 
 app.get('/api/auth/discord/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, error, error_description } = req.query;
+
+  if (error) {
+    console.error(`[Discord OAuth Debug] Erro retornado pelo Discord: ${error} - ${error_description}`);
+    return res.redirect(`/?auth_error=${encodeURIComponent(`discord_${error}: ${error_description || ''}`)}`);
+  }
+
   if (!code) {
-    return res.redirect('/?auth_error=no_code');
+    console.error('[Discord OAuth Debug] Nenhum code recebido no callback');
+    return res.redirect('/?auth_error=no_code_provided');
   }
 
   if (!DISCORD_CLIENT_SECRET) {
-    return res.redirect('/?auth_error=missing_client_secret');
+    console.error('[Discord OAuth Debug] DISCORD_CLIENT_SECRET não configurado!');
+    return res.redirect('/?auth_error=missing_client_secret_on_server');
   }
 
   try {
     const redirectUri = getDiscordRedirectUri(req);
-    console.log(`[Discord OAuth] Trocando code com redirect_uri: ${redirectUri}`);
+    console.log(`[Discord OAuth Debug] Trocando code com redirect_uri: ${redirectUri} | client_id: ${DISCORD_CLIENT_ID}`);
+
+    const params = new URLSearchParams({
+      client_id: DISCORD_CLIENT_ID,
+      client_secret: DISCORD_CLIENT_SECRET,
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: redirectUri
+    });
 
     const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
       method: 'POST',
@@ -122,27 +138,23 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         'Accept': 'application/json',
         'User-Agent': 'DiscordBot (https://github.com/itsnikotina/DodoScreenShare, 1.0.0)'
       },
-      body: new URLSearchParams({
-        client_id: DISCORD_CLIENT_ID,
-        client_secret: DISCORD_CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redirectUri
-      }).toString()
+      body: params.toString()
     });
 
     const tokenText = await tokenResponse.text();
+    console.log(`[Discord OAuth Debug] Token HTTP Status: ${tokenResponse.status} | Resposta: ${tokenText.slice(0, 300)}`);
+
     let tokenData;
     try {
       tokenData = JSON.parse(tokenText);
     } catch (e) {
-      console.error('[Discord OAuth] Resposta não-JSON recebida da API do Discord:', tokenText);
-      return res.redirect('/?auth_error=erro_comunicacao_discord_api');
+      console.error('[Discord OAuth Debug] Resposta não-JSON ao obter token:', tokenText);
+      return res.redirect(`/?auth_error=${encodeURIComponent(`non_json_status_${tokenResponse.status}: ${tokenText.slice(0, 60)}`)}`);
     }
 
     if (!tokenResponse.ok || !tokenData.access_token) {
-      console.error('[Discord OAuth] Erro ao obter token:', tokenData);
-      const errMsg = tokenData.error_description || tokenData.error || 'token_failed';
+      console.error('[Discord OAuth Debug] Erro retornado ao obter token:', tokenData);
+      const errMsg = tokenData.error_description || tokenData.error || `http_error_${tokenResponse.status}`;
       return res.redirect(`/?auth_error=${encodeURIComponent(errMsg)}`);
     }
 
@@ -155,16 +167,18 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     });
 
     const userText = await userResponse.text();
+    console.log(`[Discord OAuth Debug] User HTTP Status: ${userResponse.status} | Resposta: ${userText.slice(0, 300)}`);
+
     let userData;
     try {
       userData = JSON.parse(userText);
     } catch (e) {
-      console.error('[Discord OAuth] Erro ao decodificar perfil:', userText);
+      console.error('[Discord OAuth Debug] Erro ao decodificar perfil:', userText);
       return res.redirect('/?auth_error=user_fetch_failed');
     }
 
     if (!userResponse.ok) {
-      console.error('[Discord OAuth] Erro ao obter perfil:', userData);
+      console.error('[Discord OAuth Debug] Erro ao obter perfil:', userData);
       return res.redirect('/?auth_error=user_fetch_failed');
     }
 
@@ -179,11 +193,10 @@ app.get('/api/auth/discord/callback', async (req, res) => {
       avatarUrl: avatarUrl
     };
 
-    console.log(`[Discord OAuth] Login realizado: ${profile.username} (${profile.id})`);
+    console.log(`[Discord OAuth Debug] Login concluído com sucesso: ${profile.username} (${profile.id})`);
     res.redirect(`/?discord_user=${encodeURIComponent(JSON.stringify(profile))}`);
-
   } catch (err) {
-    console.error('[Discord OAuth] Exceção no callback:', err);
+    console.error('[Discord OAuth Debug] Exceção interna no callback:', err);
     res.redirect(`/?auth_error=${encodeURIComponent(err.message)}`);
   }
 });
