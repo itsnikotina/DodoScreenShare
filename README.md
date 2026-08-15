@@ -4,6 +4,22 @@ Compartilhamento de tela e áudio em tempo real de alta performance com suporte 
 
 ---
 
+## 💡 Por Que Este Projeto Existe? (Motivação)
+
+Este projeto nasceu com um propósito muito simples e essencial: **manter a amizade e a nossa dinâmica viva**.
+
+Com as recentes discussões e a possibilidade de bloqueios ao recurso nativo de compartilhamento de tela do Discord no Brasil, percebi que isso acabaria destruindo a rotina e os momentos especiais que tenho com os meus amigos. 
+
+Nós sempre nos reunimos em chamadas de voz para:
+- 🎬 **Assistir a vídeos juntos no YouTube** e dar risadas;
+- 🎵 **Acompanhar e dar feedback em projetos de música**;
+- 🎨 **Ver o processo criativo de desenhos e artes** em tempo real;
+- 🕹️ **Assistir gameplay e ver os amigos jogando**.
+
+Como nada disso deveria ser interrompido por decisões externas ou restrições regionais, desenvolvi o **Dodo Screen Share** como uma solução alternativa, leve e independente para que qualquer pessoa possa continuar compartilhando sua tela, áudio e momentos com seus amigos diretamente no Discord, sem barreiras.
+
+---
+
 ## 🚀 Funcionalidades
 
 - **🎮 Integração Nativa com Discord Activity:**
