@@ -777,11 +777,11 @@ function setFocusMode(focused) {
     dom.videoWrapper.classList.add('is-focused');
   } else {
     dom.videoWrapper.classList.remove('is-focused');
-  }
-}
-
 function isInsideDiscordActivity() {
-  return window.self !== window.top || window.location.search.includes('frame_id') || window.location.search.includes('instance_id');
+  const inIframe = window.self !== window.top;
+  const isDiscordProxy = window.location.hostname.includes('discordsays.com');
+  const hasDiscordParams = window.location.search.includes('discord_proxy_ticket=') || (window.location.search.includes('frame_id=') && inIframe);
+  return inIframe || isDiscordProxy || hasDiscordParams;
 }
 
 function updateAvailableStreams(streams, participants = []) {
@@ -790,14 +790,14 @@ function updateAvailableStreams(streams, participants = []) {
     state.callParticipants = participants;
   }
 
-  // No navegador externo, o site opera exclusivamente como Painel de Envio (Host).
-  // A galeria de membros e transmissões só é exibida dentro da Atividade do Discord!
+  // No navegador externo (Web Panel), o site opera exclusivamente como Painel de Envio do Host.
+  // Nunca assiste nem renderiza transmissões de outros usuários na tela do Host.
   if (!isInsideDiscordActivity()) {
     if (dom.callGalleryShelf) dom.callGalleryShelf.style.display = 'none';
     if (!state.isHosting) {
       dom.videoPlaceholder.classList.remove('hidden');
       dom.placeholderText.textContent = 'Painel de Transmissão do Host';
-      dom.placeholderTip.textContent = 'Clique em "Compartilhar Minha Tela" acima para transmitir. Os membros da call assistirão pela Atividade do Discord!';
+      dom.placeholderTip.textContent = 'Clique em "Compartilhar Minha Tela" para transmitir. Os membros da call assistirão pela Atividade do Discord!';
     }
     return;
   }
@@ -889,12 +889,13 @@ function updateAvailableStreams(streams, participants = []) {
   }
 
   // Auto-seleciona na entrada da Activity se o usuário ainda não escolheu parar
-  if (!state.watchingHostId && !state.isHosting && streams.length > 0 && !state.userStoppedWatching) {
+  if (!state.watchingHostId && !state.isHosting && streams.length > 0 && !state.userStoppedWatching && isInsideDiscordActivity()) {
     selectStream(streams[0].hostId, true);
   }
 }
 
 function selectStream(hostId, force = false) {
+  if (!isInsideDiscordActivity()) return; // No navegador web externo (Host), nunca assiste streams de terceiros
   state.userStoppedWatching = false;
   ensureViewerAudioContext();
 
@@ -1513,7 +1514,7 @@ function ensureViewerAudioContext() {
 let lastViewerFrameRenderTime = 0;
 
 function renderIncomingFrame(frameData) {
-  if (!frameData) return;
+  if (!frameData || !isInsideDiscordActivity()) return;
 
   // 1. Limitação de 30 FPS no espectador para economizar CPU em PCs fracos
   if (state.viewerCap30Fps) {
@@ -1573,7 +1574,7 @@ function renderIncomingFrame(frameData) {
 }
 
 function playIncomingAudioChunk(audioPayload) {
-  if (!audioPayload || (!audioPayload.b64 && !audioPayload.data)) return;
+  if (!audioPayload || (!audioPayload.b64 && !audioPayload.data) || !isInsideDiscordActivity()) return;
   if (state.isMuted || state.currentVolume <= 0 || isStreamOwnedByMe(state.watchingHostId)) return;
 
   try {
@@ -1645,7 +1646,7 @@ async function createOfferForViewer(viewerId) {
 }
 
 async function handleOfferAndCreateAnswer(sdp, hostId) {
-  if (!PeerConnectionClass) return;
+  if (!PeerConnectionClass || !isInsideDiscordActivity()) return;
   try {
     if (state.viewerPeerConnection) state.viewerPeerConnection.close();
 
