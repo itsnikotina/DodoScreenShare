@@ -115,10 +115,11 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     const redirectUri = getDiscordRedirectUri(req);
     console.log(`[Discord OAuth] Trocando code com redirect_uri: ${redirectUri}`);
 
-    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+    const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
         'User-Agent': 'DiscordBot (https://github.com/itsnikotina/DodoScreenShare, 1.0.0)'
       },
       body: new URLSearchParams({
@@ -145,9 +146,10 @@ app.get('/api/auth/discord/callback', async (req, res) => {
       return res.redirect(`/?auth_error=${encodeURIComponent(errMsg)}`);
     }
 
-    const userResponse = await fetch('https://discord.com/api/users/@me', {
+    const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
+        'Accept': 'application/json',
         'User-Agent': 'DiscordBot (https://github.com/itsnikotina/DodoScreenShare, 1.0.0)'
       }
     });

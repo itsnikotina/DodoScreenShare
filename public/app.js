@@ -365,7 +365,7 @@ function initDiscordAuth() {
   }
 
   if (urlParams.has('auth_error')) {
-    log('ℹ️ Dica: Você pode transmitir diretamente definindo seu Nickname no botão acima, sem necessidade de login!', 'info');
+    log(`Erro no Login Discord: ${urlParams.get('auth_error')}`, 'error');
   }
 
   if (!state.userProfile) {
@@ -375,46 +375,17 @@ function initDiscordAuth() {
     }
   }
 
-  if (!state.userProfile) {
-    const savedNick = localStorage.getItem('host_nickname') || 'Nikotina';
-    state.userProfile = {
-      id: 'host_' + Math.random().toString(36).substring(2, 8),
-      username: savedNick,
-      avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
-    };
-  }
-
-  if (dom.userProfileBadge && state.userProfile) {
-    dom.userProfileBadge.classList.remove('hidden');
-    dom.userAvatarSmall.src = state.userProfile.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
-    dom.userNameSmall.textContent = state.userProfile.username || 'Host';
-  }
-}
-
-if (dom.userNameSmall) {
-  dom.userNameSmall.style.cursor = 'pointer';
-  dom.userNameSmall.title = 'Clique para alterar seu Nickname';
-  dom.userNameSmall.addEventListener('click', () => {
-    const current = state.userProfile?.username || 'Nikotina';
-    const newName = prompt('Digite seu Nickname para a transmissão:', current);
-    if (newName && newName.trim()) {
-      const trimmed = newName.trim();
-      state.userProfile = {
-        ...(state.userProfile || {}),
-        username: trimmed
-      };
-      localStorage.setItem('host_nickname', trimmed);
-      dom.userNameSmall.textContent = trimmed;
-      log(`Nickname atualizado para: ${trimmed}`, 'success');
-
-      sendSignal({
-        type: 'join-room',
-        roomId: state.roomId,
-        platform: isInsideDiscordActivity() ? 'discord' : 'web',
-        profile: state.userProfile
-      });
+  if (state.userProfile) {
+    if (dom.btnDiscordLogin) dom.btnDiscordLogin.classList.add('hidden');
+    if (dom.userProfileBadge) {
+      dom.userProfileBadge.classList.remove('hidden');
+      dom.userAvatarSmall.src = state.userProfile.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
+      dom.userNameSmall.textContent = state.userProfile.username || 'Usuário Discord';
     }
-  });
+  } else {
+    if (dom.btnDiscordLogin) dom.btnDiscordLogin.classList.remove('hidden');
+    if (dom.userProfileBadge) dom.userProfileBadge.classList.add('hidden');
+  }
 }
 
 // ==========================================
