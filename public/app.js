@@ -298,16 +298,21 @@ const sessionStartTime = Math.floor(Date.now() / 1000);
 
 async function setupDiscordRichPresence() {
   const isIframe = window.self !== window.top || window.location.hostname.includes('discordsays.com');
-  if (!isIframe) return;
+  if (!isIframe) {
+    console.log('[DiscordSDK] Executando fora da Atividade do Discord - Rich Presence ignorado no navegador comum.');
+    return;
+  }
 
   try {
+    log('🎮 Inicializando Discord Embedded SDK...', 'info');
     const SDKClass = window.DiscordSDK || (window.Discord && window.Discord.DiscordSDK) || EmbeddedDiscordSDK;
     discordSdk = new SDKClass('787371101177118750');
     await discordSdk.ready();
-    log('Discord Embedded App SDK pronto e ativo!', 'success');
+    log('✅ Discord Embedded App SDK conectado!', 'success');
 
     // 1. Autorização com o escopo oficial rpc.activities.write
     try {
+      log('🔑 Solicitando autorização rpc.activities.write ao Discord...', 'info');
       const authResult = await discordSdk.commands.authorize({
         client_id: '787371101177118750',
         response_type: 'code',
@@ -316,24 +321,31 @@ async function setupDiscordRichPresence() {
         scope: ['identify', 'rpc.activities.write']
       });
 
+      console.log('[DiscordSDK] Resultado da autorização:', authResult);
+
       if (authResult && authResult.code) {
-        log('Autenticando permissão de Rich Presence...', 'info');
+        log('🔄 Code recebido! Trocando por token de Rich Presence...', 'info');
         const tokenRes = await fetch('/api/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code: authResult.code })
         });
 
-        if (tokenRes.ok) {
-          const { access_token } = await tokenRes.json();
-          if (access_token) {
-            await discordSdk.commands.authenticate({ access_token });
-            log('Rich Presence autenticado com sucesso no Discord!', 'success');
-          }
+        const tokenJson = await tokenRes.json();
+        console.log('[DiscordSDK] Resposta do /api/token:', tokenJson);
+
+        if (tokenRes.ok && tokenJson.access_token) {
+          await discordSdk.commands.authenticate({ access_token: tokenJson.access_token });
+          log('🎉 Rich Presence autenticado com sucesso no Discord!', 'success');
+        } else {
+          log(`⚠️ Falha na troca de token: ${tokenJson.error || tokenRes.status}`, 'warn');
         }
+      } else {
+        log('⚠️ Discord não retornou code de autorização para Rich Presence.', 'warn');
       }
     } catch (authErr) {
       console.warn('[DiscordSDK] Autorização Rich Presence:', authErr);
+      log(`⚠️ Autorização Rich Presence: ${authErr.message || JSON.stringify(authErr)}`, 'warn');
     }
 
     updateDiscordPresence('Assistindo tela via Dodo', 'Dodo Screen Share');
@@ -345,6 +357,7 @@ async function setupDiscordRichPresence() {
     } catch (e) {}
   } catch (err) {
     console.warn('[DiscordSDK] Erro ao inicializar SDK:', err);
+    log(`❌ Erro no SDK do Discord: ${err.message}`, 'error');
   }
 }
 
