@@ -471,7 +471,7 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
           width: { ideal: maxW, max: maxW },
           height: { ideal: maxH, max: maxH }
         },
-        audio: includeAudio
+        audio: false // Áudio nativo 48kHz Estéreo é gerenciado exclusivamente pelo parec/pw-record sem duplicidade
       });
     } catch (err1) {
       stream = await navigator.mediaDevices.getDisplayMedia({

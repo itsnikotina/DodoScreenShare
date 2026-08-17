@@ -1730,17 +1730,13 @@ async function handleOfferAndCreateAnswer(sdp, hostId) {
 
     state.remoteStream = new MediaStream();
     dom.preview.srcObject = state.remoteStream;
-    dom.preview.muted = state.isMuted;
-    dom.preview.volume = state.currentVolume;
+    dom.preview.muted = true; // Áudio é reproduzido exclusivamente pelo AudioContext em 48kHz Estéreo
     dom.preview.classList.remove('hidden');
     dom.canvasPreview.classList.add('hidden');
     dom.videoPlaceholder.classList.add('hidden');
 
     pc.ontrack = (event) => {
       state.remoteStream.addTrack(event.track);
-      if (event.track.kind === 'audio') {
-        initAudioVisualizer(state.remoteStream);
-      }
     };
 
     pc.onicecandidate = (event) => {
