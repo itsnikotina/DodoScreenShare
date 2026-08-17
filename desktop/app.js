@@ -529,16 +529,9 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
             const pctL = (rmsL * 100).toFixed(1);
             const pctR = (rmsR * 100).toFixed(1);
 
-            // Atualiza VU meter visual instantaneamente
+            // Atualiza VU meter visual instantaneamente com zero peso no console de logs
             if (dom.audioDbText) dom.audioDbText.textContent = `E: ${pctL}% | D: ${pctR}%`;
             if (dom.audioVuBar) dom.audioVuBar.style.width = `${Math.min(100, Math.max(rmsL, rmsR) * 150)}%`;
-
-            // Log contínuo em tempo real (a cada ~80ms / 12x por segundo para fluidez máxima)
-            const now = performance.now();
-            if (now - lastLogTime >= 80) {
-              lastLogTime = now;
-              log(`🔊 Estéreo Nativo [Canal E: ${pctL}% | Canal D: ${pctR}%] (#${sentChunks})`, 'info');
-            }
           } catch (e) {}
         });
         log(`🔊 Áudio nativo conectado com sucesso! (Estéreo 48kHz via ${nativeStereoResult?.tool || 'parec'})`, 'success');
@@ -737,16 +730,9 @@ function startAudioStreamer(audioStream) {
       const pctL = (rmsL * 100).toFixed(1);
       const pctR = (rmsR * 100).toFixed(1);
 
-      // Atualiza VU meter visual instantaneamente
+      // Atualiza VU meter visual instantaneamente com zero peso no console de logs
       if (dom.audioDbText) dom.audioDbText.textContent = `E: ${pctL}% | D: ${pctR}%`;
       if (dom.audioVuBar) dom.audioVuBar.style.width = `${Math.min(100, Math.max(rmsL, rmsR) * 150)}%`;
-
-      if (!state.lastFallbackLogTime) state.lastFallbackLogTime = 0;
-      const now = performance.now();
-      if (now - state.lastFallbackLogTime >= 80) {
-        state.lastFallbackLogTime = now;
-        log(`🔊 Estéreo Ativo [Canal E: ${pctL}% | Canal D: ${pctR}%] (#${sentChunks})`, 'info');
-      }
     };
 
     source.connect(state.scriptProcessor);
