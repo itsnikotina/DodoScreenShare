@@ -136,25 +136,36 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       nativeAudioProcess = null;
     }
 
-    // Tenta isolamento de áudio em segundo plano (sem travar nem rejeitar)
-    setupAutomaticAudioIsolation().catch((e) => {
-      console.warn('[Audio Isolation] Aviso:', e.message);
-    });
+    // Descobre o sink padrão atual do sistema
+    let monitorDevice = null;
+    try {
+      const { stdout: sinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
+      const defSink = sinkOut.trim();
+      if (defSink) {
+        monitorDevice = `${defSink}.monitor`;
+      }
+    } catch (e) {}
 
-    // Grava diretamente em 48kHz Estéreo 2 Canais L/R
+    const args = [
+      '--format=s16le',
+      '--rate=48000',
+      '--channels=2',
+      '--latency-msec=20'
+    ];
+    if (monitorDevice) {
+      args.push('-d', monitorDevice);
+    }
+
+    console.log(`[Native Audio] Iniciando parec com dispositivo: ${monitorDevice || 'Padrão'}`);
+
     let p = null;
     let toolName = 'parec';
     try {
-      p = spawn('parec', [
-        '--format=s16le',
-        '--rate=48000',
-        '--channels=2',
-        '--latency-msec=20'
-      ]);
+      p = spawn('parec', args, { env: process.env });
     } catch (err) {
       try {
         toolName = 'pw-record';
-        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-']);
+        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-'], { env: process.env });
       } catch (err2) {
         return { success: false, error: 'Nem parec nem pw-record encontrados' };
       }
@@ -179,8 +190,8 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     });
 
     nativeAudioProcess = p;
-    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch) iniciada com sucesso!`);
-    return { success: true, tool: toolName };
+    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch, ${monitorDevice || 'Padrão'}) iniciada com sucesso!`);
+    return { success: true, tool: toolName, device: monitorDevice || 'default' };
   } catch (err) {
     console.warn('[Native Audio] Falha ao iniciar áudio nativo:', err.message);
     return { success: false, error: err.message };
