@@ -222,9 +222,14 @@ async function setupAutomaticAudioIsolation() {
       } catch (e) {}
     }
 
-    // 2. Limpa instâncias anteriores
-    await execAsync('pactl unload-module $(pactl list short modules | grep "sink_name=Dodo_Audio" | awk \'{print $1}\') 2>/dev/null || true');
-    await execAsync('pactl unload-module $(pactl list short modules | grep "source=Dodo_Audio.monitor" | awk \'{print $1}\') 2>/dev/null || true');
+    // 2. Limpa TODOS os módulos anteriores (null-sink e loopback) para evitar áudio duplicado
+    try {
+      await execAsync(`
+        for mod in $(pactl list short modules 2>/dev/null | grep -E "Dodo_Audio|module-loopback.*Dodo" | awk '{print $1}'); do
+          pactl unload-module $mod 2>/dev/null || true
+        done
+      `);
+    } catch (e) {}
 
     // 3. Cria o canal de áudio Dodo_Audio (Forçado em Estéreo 48kHz 2 Canais L/R)
     const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio rate=48000 channels=2 channel_map=front-left,front-right sink_properties=device.description="Dodo_Game_Audio"');
@@ -277,8 +282,11 @@ async function cleanupAudioIsolation() {
     if (originalDefaultSink) {
       await execAsync(`pactl set-default-sink "${originalDefaultSink}" 2>/dev/null || true`);
     }
-    if (audioModuleLoopbackId) await execAsync(`pactl unload-module ${audioModuleLoopbackId} 2>/dev/null || true`);
-    if (audioModuleSinkId) await execAsync(`pactl unload-module ${audioModuleSinkId} 2>/dev/null || true`);
+    await execAsync(`
+      for mod in $(pactl list short modules 2>/dev/null | grep -E "Dodo_Audio|module-loopback.*Dodo" | awk '{print $1}'); do
+        pactl unload-module $mod 2>/dev/null || true
+      done
+    `);
   } catch (e) {}
 }
 

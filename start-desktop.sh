@@ -22,8 +22,11 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Finaliza instâncias anteriores para garantir carregamento limpo
+# Finaliza instâncias e limpa módulos de áudio anteriores para evitar som duplicado
 pkill -f "electron desktop/main.js" 2>/dev/null || true
 pkill -f "parec" 2>/dev/null || true
+for mod in $(pactl list short modules 2>/dev/null | grep -E "Dodo_Audio|module-loopback.*Dodo" | awk '{print $1}'); do
+    pactl unload-module $mod 2>/dev/null || true
+done
 
 npx electron desktop/main.js
