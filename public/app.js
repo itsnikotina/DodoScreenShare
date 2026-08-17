@@ -1623,8 +1623,23 @@ function playIncomingAudioChunk(audioPayload) {
       floatArray = new Float32Array(audioPayload.data);
     }
 
-    const audioBuffer = ctx.createBuffer(1, floatArray.length, sampleRate);
-    audioBuffer.getChannelData(0).set(floatArray);
+    const channels = audioPayload.channels || 1;
+    let audioBuffer;
+
+    if (channels === 2 && floatArray.length >= 2) {
+      const samplesPerChannel = Math.floor(floatArray.length / 2);
+      audioBuffer = ctx.createBuffer(2, samplesPerChannel, sampleRate);
+      const left = audioBuffer.getChannelData(0);
+      const right = audioBuffer.getChannelData(1);
+
+      for (let i = 0; i < samplesPerChannel; i++) {
+        left[i] = floatArray[i * 2];
+        right[i] = floatArray[i * 2 + 1];
+      }
+    } else {
+      audioBuffer = ctx.createBuffer(1, floatArray.length, sampleRate);
+      audioBuffer.getChannelData(0).set(floatArray);
+    }
 
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;

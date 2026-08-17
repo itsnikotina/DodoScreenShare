@@ -616,7 +616,7 @@ function startAntiLagStreamer(stream, targetFps = 30) {
   }, intervalMs);
 }
 
-// Audio Streamer via ScriptProcessor (Sem eco local e com alta fidelidade)
+// Audio Streamer via ScriptProcessor (Stereo Hi-Fi 48kHz, 2 canais L + R)
 function startAudioStreamer(audioStream) {
   try {
     const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
@@ -624,28 +624,38 @@ function startAudioStreamer(audioStream) {
 
     state.hostAudioCtx = new AudioCtxClass({ latencyHint: 'interactive', sampleRate: 48000 });
     const source = state.hostAudioCtx.createMediaStreamSource(audioStream);
-    state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(1024, 1, 1);
+    state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(1024, 2, 2);
 
     state.scriptProcessor.onaudioprocess = (e) => {
       if (!state.isHosting) return;
-      const inputData = e.inputBuffer.getChannelData(0);
-      
-      const int16Array = new Int16Array(inputData.length);
-      for (let i = 0; i < inputData.length; i++) {
-        const s = Math.max(-1, Math.min(1, inputData[i]));
-        int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      const left = e.inputBuffer.getChannelData(0);
+      const right = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : left;
+
+      const totalSamples = left.length * 2;
+      const interleaved = new Int16Array(totalSamples);
+
+      for (let i = 0; i < left.length; i++) {
+        const sL = Math.max(-1, Math.min(1, left[i]));
+        const sR = Math.max(-1, Math.min(1, right[i]));
+        interleaved[i * 2] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
+        interleaved[i * 2 + 1] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
       }
 
-      const bytes = new Uint8Array(int16Array.buffer);
+      const bytes = new Uint8Array(interleaved.buffer);
       let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      const chunk = 8192;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
       }
       const b64 = btoa(binary);
 
       sendSignal({
         type: 'stream-audio',
-        audio: { b64, sampleRate: state.hostAudioCtx.sampleRate }
+        audio: {
+          b64,
+          sampleRate: state.hostAudioCtx.sampleRate,
+          channels: 2
+        }
       });
     };
 
