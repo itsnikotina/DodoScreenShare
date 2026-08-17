@@ -907,9 +907,11 @@ function updateAvailableStreams(streams, participants = []) {
     });
   }
 
-  // Auto-seleciona na entrada da Activity se o usuário ainda não escolheu parar
-  if (!state.watchingHostId && !state.isHosting && streams.length > 0 && !state.userStoppedWatching && isInsideDiscordActivity()) {
-    selectStream(streams[0].hostId, true);
+  // Auto-seleciona na entrada ou reinício de transmissões
+  if (!state.isHosting && streams.length > 0 && isInsideDiscordActivity()) {
+    if (!state.watchingHostId || !streams.some(s => s.hostId === state.watchingHostId)) {
+      selectStream(streams[0].hostId, true);
+    }
   }
 }
 
@@ -920,6 +922,10 @@ function selectStream(hostId, force = false) {
 
   log(`Conectando à transmissão: ${hostId}...`, 'info');
   state.watchingHostId = hostId;
+
+  // Esconde placeholder imediatamente e entra no modo foco
+  if (dom.videoPlaceholder) dom.videoPlaceholder.classList.add('hidden');
+  setFocusMode(true);
 
   // Envia sempre a solicitação de inscrição
   sendSignal({
@@ -1554,16 +1560,11 @@ function renderIncomingFrame(frameData) {
 
   // 1. Limitação de 30 FPS no espectador para economizar CPU em PCs fracos
   const now = performance.now();
-  if (now - lastViewerFrameRenderTime < 30) return;
+  if (now - lastViewerFrameRenderTime < 32) return;
   lastViewerFrameRenderTime = now;
 
-  const canvas = dom.canvasPreview || document.getElementById('canvasPreview');
+  const canvas = dom.liveCanvas;
   if (!canvas) return;
-
-  // Mostra o canvas e esconde os placeholders
-  if (dom.preview) dom.preview.classList.add('hidden');
-  if (dom.videoPlaceholder) dom.videoPlaceholder.classList.add('hidden');
-  canvas.classList.remove('hidden');
 
   const img = new Image();
   img.onload = () => {
@@ -1571,11 +1572,11 @@ function renderIncomingFrame(frameData) {
     let targetH = img.height;
 
     // Resolução dinâmica ajustável por espectador
-    if (state.viewerQuality === '480p') {
+    if (state.viewerResolution === '480p') {
       targetW = 854; targetH = 480;
-    } else if (state.viewerQuality === '720p') {
+    } else if (state.viewerResolution === '720p') {
       targetW = 1280; targetH = 720;
-    } else if (state.viewerQuality === '1080p') {
+    } else if (state.viewerResolution === '1080p') {
       targetW = 1920; targetH = 1080;
     }
 
