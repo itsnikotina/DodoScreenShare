@@ -34,10 +34,10 @@ sleep 0.5
 
 echo ""
 echo -e "${CYAN}Como deseja iniciar o Servidor?${NC}"
-echo -e "  ${GREEN}1)${NC} Servidor Local (http://localhost:3000)"
-echo -e "  ${GREEN}2)${NC} Servidor + Túnel Gratuito LocalTunnel (Gera link HTTPS para o Discord)"
-echo -e "  ${GREEN}3)${NC} Servidor + Túnel Cloudflare (cloudflared)"
-echo -e "  ${GREEN}4)${NC} Servidor + Túnel Ngrok"
+echo -e "  ${GREEN}1)${NC} Servidor + Cloudflare Tunnel (${GREEN}RECOMENDADO PARA DISCORD${NC} - Sem tela de aviso)"
+echo -e "  ${GREEN}2)${NC} Servidor Local (http://localhost:3000)"
+echo -e "  ${GREEN}3)${NC} Servidor + LocalTunnel (loca.lt)"
+echo -e "  ${GREEN}4)${NC} Servidor + Ngrok"
 echo ""
 read -p "Selecione uma opção [1-4] (padrão: 1): " OPTION
 OPTION=${OPTION:-1}
@@ -52,26 +52,27 @@ trap cleanup SIGINT SIGTERM
 
 case $OPTION in
     1)
+        if ! command -v cloudflared &> /dev/null; then
+            echo -e "${RED}[AVISO] 'cloudflared' não encontrado. Instalando automaticamente...${NC}"
+            curl -L --output /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+            sudo dpkg -i /tmp/cloudflared.deb || true
+        fi
+        echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload e túnel Cloudflare...${NC}"
+        node --watch server.js &
+        sleep 2
+        echo -e "${CYAN}[TÚNEL] Gerando URL pública direta e segura para o Discord...${NC}"
+        cloudflared tunnel --url http://localhost:3000
+        ;;
+    2)
         echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload (--watch) em http://localhost:3000...${NC}"
         node --watch server.js
         ;;
-    2)
+    3)
         echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload (--watch) e gerando link HTTPS via LocalTunnel...${NC}"
         node --watch server.js &
         sleep 2
-        echo -e "${CYAN}[TÚNEL] Gerando URL pública para o Discord...${NC}"
+        echo -e "${CYAN}[TÚNEL] Gerando URL pública via LocalTunnel...${NC}"
         npx --yes localtunnel --port 3000
-        ;;
-    3)
-        if ! command -v cloudflared &> /dev/null; then
-            echo -e "${RED}[AVISO] 'cloudflared' não encontrado. Iniciando somente o servidor...${NC}"
-            node --watch server.js
-        else
-            echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload e túnel Cloudflare...${NC}"
-            node --watch server.js &
-            sleep 2
-            cloudflared tunnel --url http://localhost:3000
-        fi
         ;;
     4)
         if ! command -v ngrok &> /dev/null; then
@@ -85,7 +86,9 @@ case $OPTION in
         fi
         ;;
     *)
-        echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload (--watch)...${NC}"
-        node --watch server.js
+        echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload e túnel Cloudflare...${NC}"
+        node --watch server.js &
+        sleep 2
+        cloudflared tunnel --url http://localhost:3000
         ;;
 esac
