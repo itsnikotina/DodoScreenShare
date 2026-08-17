@@ -145,13 +145,13 @@ async function setupAutomaticAudioIsolation() {
     await execAsync('pactl unload-module $(pactl list short modules | grep "sink_name=Dodo_Audio" | awk \'{print $1}\') 2>/dev/null || true');
     await execAsync('pactl unload-module $(pactl list short modules | grep "source=Dodo_Audio.monitor" | awk \'{print $1}\') 2>/dev/null || true');
 
-    // 3. Cria o canal de áudio Dodo_Audio
-    const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio sink_properties=device.description="Dodo_Game_Audio"');
+    // 3. Cria o canal de áudio Dodo_Audio (Forçado em Estéreo 48kHz 2 Canais L/R)
+    const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio rate=48000 channels=2 channel_map=front-left,front-right sink_properties=device.description="Dodo_Game_Audio"');
     audioModuleSinkId = sinkOut.trim();
 
-    // 4. Cria o loopback para os fones do usuário
+    // 4. Cria o loopback para os fones do usuário em Estéreo
     const targetSink = originalDefaultSink || '@DEFAULT_SINK@';
-    const { stdout: loopOut } = await execAsync(`pactl load-module module-loopback source=Dodo_Audio.monitor sink="${targetSink}" latency_msec=1`);
+    const { stdout: loopOut } = await execAsync(`pactl load-module module-loopback source=Dodo_Audio.monitor sink="${targetSink}" rate=48000 channels=2 latency_msec=1`);
     audioModuleLoopbackId = loopOut.trim();
 
     // 5. Direciona os jogos/sistema para Dodo_Audio

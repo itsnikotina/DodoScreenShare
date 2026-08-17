@@ -19,11 +19,11 @@ echo -e "${CYAN}=====================================================${NC}"
 pactl unload-module $(pactl list short modules | grep "sink_name=Dodo_Audio" | awk '{print $1}') 2>/dev/null || true
 pactl unload-module $(pactl list short modules | grep "source=Dodo_Audio.monitor" | awk '{print $1}') 2>/dev/null || true
 
-echo -e "${YELLOW}[1/2] Criando Dispositivo Virtual 'Dodo_Audio'...${NC}"
-SINK_ID=$(pactl load-module module-null-sink sink_name=Dodo_Audio sink_properties=device.description="Dodo_Game_Audio")
+echo -e "${YELLOW}[1/2] Criando Dispositivo Virtual 'Dodo_Audio' (Estéreo 48kHz)...${NC}"
+SINK_ID=$(pactl load-module module-null-sink sink_name=Dodo_Audio rate=48000 channels=2 channel_map=front-left,front-right sink_properties=device.description="Dodo_Game_Audio")
 
-echo -e "${YELLOW}[2/2] Conectando áudio aos seus fones (Loopback)...${NC}"
-LOOP_ID=$(pactl load-module module-loopback source=Dodo_Audio.monitor sink=@DEFAULT_SINK@ latency_msec=1)
+echo -e "${YELLOW}[2/2] Conectando áudio aos seus fones (Loopback Estéreo)...${NC}"
+LOOP_ID=$(pactl load-module module-loopback source=Dodo_Audio.monitor sink=@DEFAULT_SINK@ rate=48000 channels=2 latency_msec=1)
 
 echo -e "${GREEN}✅ Canal de Áudio 'Dodo_Audio' configurado com sucesso!${NC}"
 echo ""
