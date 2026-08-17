@@ -15,6 +15,9 @@ echo -e "${CYAN}=====================================================${NC}"
 echo -e "${CYAN}🖥️  Iniciando Dodo Screen Share Desktop Host...${NC}"
 echo -e "${CYAN}=====================================================${NC}"
 
+echo -e "${GREEN}🔄 Atualizando repositório para a versão mais recente...${NC}"
+git pull || true
+
 if [ ! -d "node_modules" ]; then
     npm install
 fi
