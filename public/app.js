@@ -1097,9 +1097,7 @@ function toggleMute() {
 }
 
 function applyVolumeGain() {
-  const baseVolume = state.isMuted ? 0 : state.currentVolume;
-  // Multiplicador 1.5x para som alto, presente e imersivo no Discord
-  const effectiveGain = baseVolume * 1.5;
+  const effectiveGain = state.isMuted ? 0 : state.currentVolume;
 
   if (state.viewerGainNode && state.viewerAudioCtx) {
     try {
@@ -1108,7 +1106,7 @@ function applyVolumeGain() {
   }
 
   if (dom.preview) {
-    dom.preview.volume = baseVolume;
+    dom.preview.volume = effectiveGain;
     dom.preview.muted = state.isMuted;
   }
 }
