@@ -486,22 +486,19 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     // Captura de Áudio do Sistema (100% Automático com Isolamento do Discord)
     if (includeAudio) {
       if (window.electronAPI && window.electronAPI.ensureAudioIsolation) {
-        try { await window.electronAPI.ensureAudioIsolation(); } catch (e) {}
+        await window.electronAPI.ensureAudioIsolation();
       }
 
-      // Tenta primeiro o pipeline nativo via parec/pw-record (estéreo 48kHz verdadeiro no Linux)
-      let nativeStereoResult = null;
+      // Tenta primeiro o pipeline nativo via parec (estéreo 48kHz verdadeiro no Linux)
+      // Isso bypassa o bug do Chromium que força mono no getUserMedia no Linux
+      let nativeStereoStarted = false;
       if (window.electronAPI && window.electronAPI.startNativeStereoAudio) {
         try {
-          nativeStereoResult = await window.electronAPI.startNativeStereoAudio();
-        } catch (e) {
-          nativeStereoResult = { success: false, error: e.message };
-        }
+          nativeStereoStarted = await window.electronAPI.startNativeStereoAudio();
+        } catch (e) {}
       }
 
-      const isNativeOk = nativeStereoResult === true || (nativeStereoResult && nativeStereoResult.success);
-
-      if (isNativeOk) {
+      if (nativeStereoStarted) {
         // Pipeline nativo: recebe chunks PCM raw de parec e envia ao servidor em tempo real
         let sentChunks = 0;
         let lastLogTime = 0;
@@ -531,13 +528,12 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
             const now = performance.now();
             if (now - lastLogTime >= 80) {
               lastLogTime = now;
-              log(`🔊 Estéreo Nativo [Canal E: ${pctL}% | Canal D: ${pctR}%] (#${sentChunks})`, 'info');
+              log(`🔊 Estéreo Ativo [Canal E: ${pctL}% | Canal D: ${pctR}%] (#${sentChunks})`, 'info');
             }
           } catch (e) {}
         });
-        log(`🔊 Áudio nativo conectado com sucesso! (Estéreo 48kHz via ${nativeStereoResult?.tool || 'parec'})`, 'success');
+        log('🔊 Áudio nativo da aplicação conectado com sucesso! (Estéreo 48kHz via parec)', 'success');
       } else {
-        log(`⚠️ Áudio nativo indisponível (${nativeStereoResult?.error || 'fallback'}). Usando getUserMedia.`, 'warn');
         // Fallback: getUserMedia (pode ser mono no Linux — fallback apenas para Windows/Mac)
         const displayAudioTracks = stream.getAudioTracks();
 
