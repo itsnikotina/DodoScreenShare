@@ -32,9 +32,9 @@ const FILES_TO_UPDATE = [
   'package.json'
 ];
 
-function fetchRawFile(filePath) {
+function fetchRawFile(filePath, sha = 'main') {
   return new Promise((resolve, reject) => {
-    const url = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${filePath}?t=${Date.now()}`;
+    const url = `https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/${filePath}?t=${Date.now()}`;
     https.get(url, { headers: { 'User-Agent': 'DodoScreenShare-App' } }, (res) => {
       if (res.statusCode === 200) {
         let data = '';
@@ -79,7 +79,7 @@ async function checkForUpdates(silent = true) {
 
     for (const relPath of FILES_TO_UPDATE) {
       try {
-        const remoteContent = await fetchRawFile(relPath);
+        const remoteContent = await fetchRawFile(relPath, latestSha);
         const localPath = path.join(rootDir, relPath);
 
         let localContent = '';
