@@ -126,6 +126,56 @@ ipcMain.handle('reload-app', () => {
   return true;
 });
 
+// Captura Direta de Áudio Nativo em Estéreo 48kHz (L/R) via PulseAudio/PipeWire (parec)
+ipcMain.handle('start-native-stereo-audio', async () => {
+  if (process.platform !== 'linux') return false;
+
+  try {
+    if (nativeAudioProcess) {
+      nativeAudioProcess.kill();
+      nativeAudioProcess = null;
+    }
+
+    // Monitor do Dodo_Audio (Estéreo HD 48kHz, 2 Canais L/R)
+    const monitorDevice = 'Dodo_Audio.monitor';
+    nativeAudioProcess = spawn('parec', [
+      '--format=s16le',
+      '--rate=48000',
+      '--channels=2',
+      '-d', monitorDevice,
+      '--latency-msec=20'
+    ]);
+
+    nativeAudioProcess.stdout.on('data', (chunk) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('native-audio-chunk', {
+          b64: chunk.toString('base64'),
+          sampleRate: 48000,
+          channels: 2
+        });
+      }
+    });
+
+    nativeAudioProcess.on('error', (err) => {
+      console.warn('[Native Audio] Parec error:', err.message);
+    });
+
+    console.log('[Native Audio] Captura de áudio Estéreo HD (parec 48kHz 2ch) iniciada com sucesso!');
+    return true;
+  } catch (err) {
+    console.warn('[Native Audio] Falha ao iniciar parec:', err.message);
+    return false;
+  }
+});
+
+ipcMain.handle('stop-native-stereo-audio', () => {
+  if (nativeAudioProcess) {
+    try { nativeAudioProcess.kill(); } catch (e) {}
+    nativeAudioProcess = null;
+  }
+  return true;
+});
+
 // Configuração 100% Automática de Isolamento de Áudio (Estilo Parsec/Discord no Linux)
 async function setupAutomaticAudioIsolation() {
   if (process.platform !== 'linux') return;
