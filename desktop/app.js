@@ -54,6 +54,7 @@ const dom = {
   selectResolution: document.getElementById('selectResolution'),
   selectFps: document.getElementById('selectFps'),
   chkSystemAudio: document.getElementById('chkSystemAudio'),
+  selectAudioDevice: document.getElementById('selectAudioDevice'),
 
   audioVuBar: document.getElementById('audioVuBar'),
   audioDbText: document.getElementById('audioDbText'),
@@ -91,6 +92,7 @@ const dom = {
   modalSelectResolution: document.getElementById('modalSelectResolution'),
   modalSelectFps: document.getElementById('modalSelectFps'),
   modalChkSystemAudio: document.getElementById('modalChkSystemAudio'),
+  modalSelectAudioDevice: document.getElementById('modalSelectAudioDevice'),
 
   // Modal Activity Link
   modalActivityLink: document.getElementById('modalActivityLink'),
@@ -324,6 +326,7 @@ function escapeHtml(str) {
 // ==========================================
 async function openSourcePickerModal() {
   dom.modalSourcePicker.classList.remove('hidden');
+  await populateAudioDevices();
   await refreshDesktopSources();
 }
 
@@ -435,19 +438,41 @@ async function confirmSourceSelection() {
   const res = dom.modalSelectResolution.value;
   const fps = dom.modalSelectFps.value;
   const audio = dom.modalChkSystemAudio.checked;
+  const audioDev = dom.modalSelectAudioDevice ? dom.modalSelectAudioDevice.value : 'default';
 
   dom.selectResolution.value = res;
   dom.selectFps.value = fps;
   dom.chkSystemAudio.checked = audio;
+  if (dom.selectAudioDevice) dom.selectAudioDevice.value = audioDev;
 
   closeSourcePickerModal();
-  await startNativeScreenSharing(state.selectedSourceId, res, Number(fps), audio);
+  await startNativeScreenSharing(state.selectedSourceId, res, Number(fps), audio, audioDev);
+}
+
+async function populateAudioDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+
+    const options = ['<option value="default">🔊 Áudio do Sistema / Padrão</option>'];
+    audioInputs.forEach((dev, idx) => {
+      if (dev.deviceId && dev.deviceId !== 'default') {
+        const label = dev.label || `Dispositivo ${idx + 1}`;
+        const isMonitor = label.toLowerCase().includes('monitor');
+        const icon = isMonitor ? '🔊' : '🎙️';
+        options.push(`<option value="${dev.deviceId}">${icon} ${escapeHtml(label)}</option>`);
+      }
+    });
+
+    if (dom.selectAudioDevice) dom.selectAudioDevice.innerHTML = options.join('');
+    if (dom.modalSelectAudioDevice) dom.modalSelectAudioDevice.innerHTML = options.join('');
+  } catch (e) {}
 }
 
 // ==========================================
 // Captura Nativa & Streaming WebRTC
 // ==========================================
-async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30, includeAudio = true) {
+async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30, includeAudio = true, audioDeviceId = 'default') {
   log(`================ INICIANDO TRANSMISSÃO DESKTOP NATIVA ===============`, 'info');
   log(`ID da Fonte: "${sourceId}" | Resolução: ${resolution} @ ${fps} FPS | Áudio: ${includeAudio ? 'SIM' : 'NÃO'}`, 'info');
 
@@ -481,23 +506,38 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     state.localStream = stream;
     state.isHosting = true;
 
-    const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length > 0) {
-      state.audioStream = stream;
-      initAudioVisualizer(stream);
-      startAudioStreamer(stream);
-      log('🔊 Áudio do sistema capturado com sucesso!', 'success');
-    } else if (includeAudio) {
+    // Captura de Áudio Isolada (Ignora retorno do Discord via cancelamento de eco acústico)
+    if (includeAudio) {
       try {
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        const audioConstraints = {
+          deviceId: audioDeviceId && audioDeviceId !== 'default' ? { exact: audioDeviceId } : undefined,
+          echoCancellation: true, // Remove retorno de voz do Discord
+          noiseSuppression: true,
+          autoGainControl: false,
+          channelCount: 2
+        };
+
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
           video: false
         });
-        state.audioStream = micStream;
-        initAudioVisualizer(micStream);
-        startAudioStreamer(micStream);
-        log('🔊 Áudio conectado com sucesso!', 'success');
-      } catch (e) {}
+
+        state.audioStream = audioStream;
+        initAudioVisualizer(audioStream);
+        startAudioStreamer(audioStream);
+        log('🔊 Entrada de áudio conectada com sucesso (Filtro anti-eco do Discord ativo)!', 'success');
+      } catch (audioErr) {
+        log(`ℹ️ Tentando captura de áudio padrão: ${audioErr.message}`, 'info');
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          state.audioStream = micStream;
+          initAudioVisualizer(micStream);
+          startAudioStreamer(micStream);
+          log('🔊 Áudio capturado com sucesso!', 'success');
+        } catch (e) {
+          log('Aviso: Áudio não disponível.', 'warn');
+        }
+      }
     }
 
     // UI Updates
@@ -576,15 +616,15 @@ function startAntiLagStreamer(stream, targetFps = 30) {
   }, intervalMs);
 }
 
-// Audio Streamer via ScriptProcessor
+// Audio Streamer via ScriptProcessor (Sem eco local e com alta fidelidade)
 function startAudioStreamer(audioStream) {
   try {
     const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtxClass) return;
 
-    state.hostAudioCtx = new AudioCtxClass({ sampleRate: 48000 });
+    state.hostAudioCtx = new AudioCtxClass({ latencyHint: 'interactive', sampleRate: 48000 });
     const source = state.hostAudioCtx.createMediaStreamSource(audioStream);
-    state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(2048, 1, 1);
+    state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(1024, 1, 1);
 
     state.scriptProcessor.onaudioprocess = (e) => {
       if (!state.isHosting) return;
@@ -609,8 +649,13 @@ function startAudioStreamer(audioStream) {
       });
     };
 
+    // Mudo no destino local do Host para não dar eco em quem está transmitindo
+    const silenceGain = state.hostAudioCtx.createGain();
+    silenceGain.gain.value = 0;
+
     source.connect(state.scriptProcessor);
-    state.scriptProcessor.connect(state.hostAudioCtx.destination);
+    state.scriptProcessor.connect(silenceGain);
+    silenceGain.connect(state.hostAudioCtx.destination);
   } catch (err) {
     log(`Erro no streamer de áudio: ${err.message}`, 'warn');
   }
@@ -817,3 +862,4 @@ dom.btnClearLogs.addEventListener('click', () => {
 dom.serverUrlInput.value = state.serverUrl;
 initWebSocket();
 startFpsMonitor();
+populateAudioDevices();
