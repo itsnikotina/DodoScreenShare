@@ -1524,6 +1524,13 @@ function ensureViewerAudioContext() {
     if (!state.viewerAudioCtx) {
       const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
       state.viewerAudioCtx = new AudioCtxClass({ latencyHint: 'interactive', sampleRate: 48000 });
+      if (state.viewerAudioCtx.destination) {
+        try {
+          state.viewerAudioCtx.destination.channelCount = 2;
+          state.viewerAudioCtx.destination.channelCountMode = 'explicit';
+          state.viewerAudioCtx.destination.channelInterpretation = 'speakers';
+        } catch (e) {}
+      }
       state.viewerGainNode = state.viewerAudioCtx.createGain();
       state.viewerGainNode.channelCount = 2;
       state.viewerGainNode.channelCountMode = 'explicit';
@@ -1546,53 +1553,30 @@ function renderIncomingFrame(frameData) {
   if (!frameData || !isInsideDiscordActivity()) return;
 
   // 1. Limitação de 30 FPS no espectador para economizar CPU em PCs fracos
-  if (state.viewerCap30Fps) {
-    const now = performance.now();
-    if (now - lastViewerFrameRenderTime < 30) {
-      return; // Pula a decodificação e desenho para poupar CPU
-    }
-    lastViewerFrameRenderTime = now;
-  }
+  const now = performance.now();
+  if (now - lastViewerFrameRenderTime < 32) return;
+  lastViewerFrameRenderTime = now;
 
-  dom.preview.classList.add('hidden');
-  dom.canvasPreview.classList.remove('hidden');
-  dom.videoPlaceholder.classList.add('hidden');
+  const canvas = dom.liveCanvas;
+  if (!canvas) return;
 
   const img = new Image();
   img.onload = () => {
-    const canvas = dom.canvasPreview;
     let targetW = img.width;
     let targetH = img.height;
 
-    // 2. Redução de resolução selecionada pelo espectador
-    if (state.viewerQuality === '360p') {
-      const maxW = 640;
-      if (img.width > maxW) {
-        const scale = maxW / img.width;
-        targetW = maxW;
-        targetH = Math.round(img.height * scale);
-      }
-    } else if (state.viewerQuality === '480p') {
-      const maxW = 854;
-      if (img.width > maxW) {
-        const scale = maxW / img.width;
-        targetW = maxW;
-        targetH = Math.round(img.height * scale);
-      }
-    } else if (state.viewerQuality === '720p') {
-      const maxW = 1280;
-      if (img.width > maxW) {
-        const scale = maxW / img.width;
-        targetW = maxW;
-        targetH = Math.round(img.height * scale);
-      }
+    // Resolução dinâmica ajustável por espectador
+    if (state.viewerResolution === '480p') {
+      targetW = 854; targetH = 480;
+    } else if (state.viewerResolution === '720p') {
+      targetW = 1280; targetH = 720;
+    } else if (state.viewerResolution === '1080p') {
+      targetW = 1920; targetH = 1080;
     }
 
     if (canvas.width !== targetW || canvas.height !== targetH) {
       canvas.width = targetW;
       canvas.height = targetH;
-      const qSuffix = state.viewerQuality === 'auto' ? '' : ` (${state.viewerQuality.toUpperCase()})`;
-      dom.statResolution.textContent = `${targetW}x${targetH}${qSuffix}`;
     }
 
     const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
@@ -1631,12 +1615,20 @@ function playIncomingAudioChunk(audioPayload) {
     if (channels === 2 && floatArray.length >= 2) {
       const samplesPerChannel = Math.floor(floatArray.length / 2);
       audioBuffer = ctx.createBuffer(2, samplesPerChannel, sampleRate);
-      const left = audioBuffer.getChannelData(0);
-      const right = audioBuffer.getChannelData(1);
+      const left = new Float32Array(samplesPerChannel);
+      const right = new Float32Array(samplesPerChannel);
 
       for (let i = 0; i < samplesPerChannel; i++) {
         left[i] = floatArray[i * 2];
         right[i] = floatArray[i * 2 + 1];
+      }
+
+      if (audioBuffer.copyToChannel) {
+        audioBuffer.copyToChannel(left, 0);
+        audioBuffer.copyToChannel(right, 1);
+      } else {
+        audioBuffer.getChannelData(0).set(left);
+        audioBuffer.getChannelData(1).set(right);
       }
     } else {
       audioBuffer = ctx.createBuffer(1, floatArray.length, sampleRate);
@@ -1645,6 +1637,8 @@ function playIncomingAudioChunk(audioPayload) {
 
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
+    source.channelCount = 2;
+    source.channelCountMode = 'explicit';
     source.connect(state.viewerGainNode);
 
     const now = ctx.currentTime;
@@ -1658,7 +1652,7 @@ function playIncomingAudioChunk(audioPayload) {
 
     if (!firstAudioReceived) {
       firstAudioReceived = true;
-      log(`🔊 Reproduzindo fluxo de áudio estéreo HD (${channels === 2 ? 'Estéreo' : 'Mono'}, ${sampleRate}Hz)...`, 'success');
+      log(`🔊 Reproduzindo fluxo de áudio estéreo HD (${channels === 2 ? 'Estéreo L/R' : 'Mono'}, ${sampleRate}Hz)...`, 'success');
     }
   } catch (err) {}
 }

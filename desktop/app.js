@@ -647,9 +647,13 @@ function startAudioStreamer(audioStream) {
       const totalSamples = left.length * 2;
       const interleaved = new Int16Array(totalSamples);
 
+      let sumL = 0;
+      let sumR = 0;
       for (let i = 0; i < left.length; i++) {
         const sL = Math.max(-1, Math.min(1, left[i]));
         const sR = Math.max(-1, Math.min(1, right[i]));
+        sumL += sL * sL;
+        sumR += sR * sR;
         interleaved[i * 2] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
         interleaved[i * 2 + 1] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
       }
@@ -673,7 +677,9 @@ function startAudioStreamer(audioStream) {
 
       sentChunks++;
       if (sentChunks === 1 || sentChunks % 300 === 0) {
-        log(`🔊 Transmitindo áudio estéreo HD (${sentChunks} blocos enviados)...`, 'info');
+        const rmsL = Math.sqrt(sumL / left.length);
+        const rmsR = Math.sqrt(sumR / right.length);
+        log(`🔊 Estéreo Ativo [Canal E: ${(rmsL * 100).toFixed(0)}% | Canal D: ${(rmsR * 100).toFixed(0)}%] (${sentChunks} blocos)`, 'info');
       }
     };
 
