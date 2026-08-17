@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import https from 'https';
 import { fileURLToPath } from 'url';
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -12,7 +12,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow = null;
-let nativeAudioProcess = null;
 let audioModuleSinkId = null;
 let audioModuleLoopbackId = null;
 let originalDefaultSink = null;
@@ -133,21 +132,30 @@ ipcMain.handle('start-native-stereo-audio', async () => {
 
   try {
     if (nativeAudioProcess) {
-      nativeAudioProcess.kill();
+      try { nativeAudioProcess.kill(); } catch (e) {}
       nativeAudioProcess = null;
     }
 
-    // Monitor do Dodo_Audio (Estéreo HD 48kHz, 2 Canais L/R)
-    const monitorDevice = 'Dodo_Audio.monitor';
-    nativeAudioProcess = spawn('parec', [
-      '--format=s16le',
-      '--rate=48000',
-      '--channels=2',
-      '-d', monitorDevice,
-      '--latency-msec=20'
-    ]);
+    // Garante que o sink Dodo_Audio está carregado
+    await setupAutomaticAudioIsolation();
 
-    nativeAudioProcess.stdout.on('data', (chunk) => {
+    // Tenta gravar de Dodo_Audio.monitor ou monitor padrão
+    const spawnParec = (device) => {
+      const args = [
+        '--format=s16le',
+        '--rate=48000',
+        '--channels=2',
+        '--latency-msec=20'
+      ];
+      if (device) args.push('-d', device);
+      return spawn('parec', args);
+    };
+
+    let p = spawnParec('Dodo_Audio.monitor');
+    let hasReceivedData = false;
+
+    p.stdout.on('data', (chunk) => {
+      hasReceivedData = true;
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('native-audio-chunk', {
           b64: chunk.toString('base64'),
@@ -157,11 +165,16 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       }
     });
 
-    nativeAudioProcess.on('error', (err) => {
-      console.warn('[Native Audio] Parec error:', err.message);
+    p.stderr.on('data', (errData) => {
+      console.warn('[Native Audio Parec stderr]:', errData.toString());
     });
 
-    console.log('[Native Audio] Captura de áudio Estéreo HD (parec 48kHz 2ch) iniciada com sucesso!');
+    p.on('error', (err) => {
+      console.warn('[Native Audio] Parec spawn error:', err.message);
+    });
+
+    nativeAudioProcess = p;
+    console.log('[Native Audio] Captura de áudio Estéreo HD (parec 48kHz 2ch) iniciada!');
     return true;
   } catch (err) {
     console.warn('[Native Audio] Falha ao iniciar parec:', err.message);
