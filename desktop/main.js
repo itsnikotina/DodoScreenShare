@@ -137,27 +137,21 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       nativeAudioProcess = null;
     }
 
-    // Descobre o sink padrão atual do sistema
-    let monitorDevice = null;
-    try {
-      const { stdout: sinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
-      const defSink = sinkOut.trim();
-      if (defSink) {
-        monitorDevice = `${defSink}.monitor`;
-      }
-    } catch (e) {}
+    // Configura o canal virtual Dodo_Audio de alta fidelidade 48kHz estéreo
+    await setupAutomaticAudioIsolation();
+
+    // Monitor do canal Dodo_Audio
+    let monitorDevice = 'Dodo_Audio.monitor';
 
     const args = [
       '--format=s16le',
       '--rate=48000',
       '--channels=2',
-      '--latency-msec=20'
+      '--latency-msec=20',
+      '-d', monitorDevice
     ];
-    if (monitorDevice) {
-      args.push('-d', monitorDevice);
-    }
 
-    console.log(`[Native Audio] Iniciando parec com dispositivo: ${monitorDevice || 'Padrão'}`);
+    console.log(`[Native Audio] Iniciando parec gravando de: ${monitorDevice}`);
 
     let p = null;
     let toolName = 'parec';
@@ -166,7 +160,7 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     } catch (err) {
       try {
         toolName = 'pw-record';
-        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-'], { env: process.env });
+        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-d', monitorDevice, '-'], { env: process.env });
       } catch (err2) {
         return { success: false, error: 'Nem parec nem pw-record encontrados' };
       }
@@ -191,19 +185,20 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     });
 
     nativeAudioProcess = p;
-    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch, ${monitorDevice || 'Padrão'}) iniciada com sucesso!`);
-    return { success: true, tool: toolName, device: monitorDevice || 'default' };
+    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch, ${monitorDevice}) iniciada com sucesso!`);
+    return { success: true, tool: toolName, device: monitorDevice };
   } catch (err) {
     console.warn('[Native Audio] Falha ao iniciar áudio nativo:', err.message);
     return { success: false, error: err.message };
   }
 });
 
-ipcMain.handle('stop-native-stereo-audio', () => {
+ipcMain.handle('stop-native-stereo-audio', async () => {
   if (nativeAudioProcess) {
     try { nativeAudioProcess.kill(); } catch (e) {}
     nativeAudioProcess = null;
   }
+  await cleanupAudioIsolation();
   return true;
 });
 
@@ -211,16 +206,23 @@ ipcMain.handle('stop-native-stereo-audio', () => {
 async function setupAutomaticAudioIsolation() {
   if (process.platform !== 'linux') return;
   try {
-    // 1. Salva o dispositivo físico padrão original do usuário (fones de ouvido)
-    if (!originalDefaultSink) {
-      try {
-        const { stdout: defSinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
-        const trimmed = defSinkOut.trim();
-        if (trimmed && trimmed !== 'Dodo_Audio') {
-          originalDefaultSink = trimmed;
+    // 1. Detecta o dispositivo físico real do usuário (fones de ouvido)
+    let physicalSink = originalDefaultSink;
+    try {
+      const { stdout: sinksList } = await execAsync('pactl list short sinks 2>/dev/null || true');
+      const lines = sinksList.split('\n').filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split('\t');
+        const sName = parts[1] || line.split(' ')[1];
+        if (sName && !sName.includes('Dodo_Audio') && !sName.includes('null')) {
+          if (!physicalSink) {
+            physicalSink = sName.trim();
+            originalDefaultSink = physicalSink;
+          }
+          break;
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
 
     // 2. Limpa TODOS os módulos anteriores (null-sink e loopback) para evitar áudio duplicado
     try {
@@ -235,15 +237,15 @@ async function setupAutomaticAudioIsolation() {
     const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio rate=48000 channels=2 channel_map=front-left,front-right sink_properties=device.description="Dodo_Game_Audio"');
     audioModuleSinkId = sinkOut.trim();
 
-    // 4. Cria o loopback para os fones do usuário em Estéreo
-    const targetSink = originalDefaultSink || '@DEFAULT_SINK@';
+    // 4. Cria o loopback exclusivo para os fones físicos do usuário (Zero duplicação)
+    const targetSink = physicalSink || originalDefaultSink || '@DEFAULT_SINK@';
     const { stdout: loopOut } = await execAsync(`pactl load-module module-loopback source=Dodo_Audio.monitor sink="${targetSink}" rate=48000 channels=2 latency_msec=1`);
     audioModuleLoopbackId = loopOut.trim();
 
     // 5. Direciona os jogos/sistema para Dodo_Audio
     await execAsync('pactl set-default-sink Dodo_Audio');
 
-    // 6. Move imediatamente e continuamente o Discord para os fones físicos (Zero eco na live)
+    // 6. Move o Discord para os fones físicos (Zero eco da voz dos amigos)
     async function isolateDiscordAudio() {
       try {
         const { stdout: inputsOut } = await execAsync('pactl list sink-inputs');
@@ -254,7 +256,7 @@ async function setupAutomaticAudioIsolation() {
           const inputId = idMatch[1];
           const isDiscord = /application\.process\.binary\s*=\s*"Discord"|application\.name\s*=\s*"WEBRTC VoiceEngine"|application\.name\s*=\s*"Discord"/i.test(block);
           if (isDiscord) {
-            const hwSink = originalDefaultSink || '@DEFAULT_SINK@';
+            const hwSink = physicalSink || originalDefaultSink || '@DEFAULT_SINK@';
             await execAsync(`pactl move-sink-input ${inputId} "${hwSink}" 2>/dev/null || true`);
           }
         }
@@ -266,7 +268,7 @@ async function setupAutomaticAudioIsolation() {
     if (isolationInterval) clearInterval(isolationInterval);
     isolationInterval = setInterval(isolateDiscordAudio, 2000);
 
-    console.log('[Audio Isolation] Isolamento ativo! Jogos -> Dodo_Audio | Discord -> Fones físicos.');
+    console.log('[Audio Isolation] Dodo_Audio criado com sucesso! Fones físicos:', targetSink);
   } catch (err) {
     console.warn('[Audio Isolation] Inicialização do canal de áudio:', err.message);
   }
