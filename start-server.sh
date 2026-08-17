@@ -26,11 +26,11 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-# 2. Instalar dependências se necessário
-if [ ! -d "node_modules" ]; then
-    echo -e "${YELLOW}[INFO] Instalando dependências (npm install)...${NC}"
-    npm install
-fi
+# 3. Liberar porta 3000 caso haja algum processo anterior preso
+echo -e "${YELLOW}[INFO] Verificando e liberando porta 3000...${NC}"
+fuser -k 3000/tcp 2>/dev/null || true
+pkill -f "node.*server.js" 2>/dev/null || true
+sleep 0.5
 
 echo ""
 echo -e "${CYAN}Como deseja iniciar o Servidor?${NC}"
@@ -44,7 +44,8 @@ OPTION=${OPTION:-1}
 
 cleanup() {
     echo -e "\n${YELLOW}[INFO] Encerrando servidor e túneis...${NC}"
-    kill 0
+    kill 0 2>/dev/null || true
+    fuser -k 3000/tcp 2>/dev/null || true
     exit 0
 }
 trap cleanup SIGINT SIGTERM
@@ -59,7 +60,7 @@ case $OPTION in
         node server.js &
         sleep 2
         echo -e "${CYAN}[TÚNEL] Gerando URL pública para o Discord...${NC}"
-        npx localtunnel --port 3000
+        npx --yes localtunnel --port 3000
         ;;
     3)
         if ! command -v cloudflared &> /dev/null; then
