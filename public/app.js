@@ -707,9 +707,32 @@ async function handleSignalMessage(msg) {
     }
 
     // Atualização dos espectadores que estão assistindo MINHA tela
-    case 'stream-viewers-updated':
-      updateHostViewersList(msg.viewers || [], msg.total || 0, msg.discordCount || 0, msg.webCount || 0);
+    case 'stream-viewers-updated': {
+      const discordCount = msg.discordCount || 0;
+      const total = msg.total || 0;
+      updateHostViewersList(msg.viewers || [], total, discordCount, msg.webCount || 0);
+
+      if (state.isHosting) {
+        if (discordCount > 0 || total > 0) {
+          state.hadActiveViewers = true;
+          if (state.emptyViewerTimeout) {
+            clearTimeout(state.emptyViewerTimeout);
+            state.emptyViewerTimeout = null;
+          }
+        } else if (state.hadActiveViewers && total === 0) {
+          // Se já tivemos espectadores e agora todos saíram da chamada do Discord, encerra automaticamente
+          if (!state.emptyViewerTimeout) {
+            state.emptyViewerTimeout = setTimeout(() => {
+              if (state.isHosting) {
+                log('🚪 Todos os espectadores saíram da chamada. Encerrando transmissão automaticamente...', 'warn');
+                stopSharing();
+              }
+            }, 3000);
+          }
+        }
+      }
       break;
+    }
 
     // Sala/Chamada esvaziada no Discord
     case 'call-empty-stop-stream':
@@ -1818,6 +1841,11 @@ function stopSharing() {
   log('Encerrando sua transmissão...', 'info');
 
   state.isHosting = false;
+  state.hadActiveViewers = false;
+  if (state.emptyViewerTimeout) {
+    clearTimeout(state.emptyViewerTimeout);
+    state.emptyViewerTimeout = null;
+  }
 
   if (timerWorker) timerWorker.postMessage('stop');
   if (state.antiLagInterval) clearInterval(state.antiLagInterval);
