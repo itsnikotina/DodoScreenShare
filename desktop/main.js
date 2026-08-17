@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
 import path from 'path';
+import fs from 'fs';
+import https from 'https';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -14,6 +16,115 @@ let audioModuleSinkId = null;
 let audioModuleLoopbackId = null;
 let originalDefaultSink = null;
 let isolationInterval = null;
+
+const GITHUB_REPO = 'itsnikotina/DodoScreenShare';
+const GITHUB_BRANCH = 'main';
+const FILES_TO_UPDATE = [
+  'desktop/app.js',
+  'desktop/main.js',
+  'desktop/index.html',
+  'desktop/style.css',
+  'desktop/preload.cjs',
+  'public/app.js',
+  'public/index.html',
+  'public/style.css',
+  'server.js',
+  'package.json'
+];
+
+function fetchRawFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const url = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${filePath}?t=${Date.now()}`;
+    https.get(url, { headers: { 'User-Agent': 'DodoScreenShare-App' } }, (res) => {
+      if (res.statusCode === 200) {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => resolve(data));
+      } else {
+        reject(new Error(`HTTP ${res.statusCode}`));
+      }
+    }).on('error', reject);
+  });
+}
+
+function fetchLatestCommit() {
+  return new Promise((resolve) => {
+    const url = `https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`;
+    https.get(url, { headers: { 'User-Agent': 'DodoScreenShare-App' } }, (res) => {
+      if (res.statusCode === 200) {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json.sha || null);
+          } catch (e) { resolve(null); }
+        });
+      } else {
+        resolve(null);
+      }
+    }).on('error', () => resolve(null));
+  });
+}
+
+let lastAppliedCommitSha = null;
+
+async function checkForUpdates(silent = true) {
+  try {
+    const latestSha = await fetchLatestCommit();
+    if (!latestSha) return { updated: false, reason: 'Sem conexão com GitHub' };
+
+    let filesChanged = 0;
+    const rootDir = path.resolve(__dirname, '..');
+
+    for (const relPath of FILES_TO_UPDATE) {
+      try {
+        const remoteContent = await fetchRawFile(relPath);
+        const localPath = path.join(rootDir, relPath);
+
+        let localContent = '';
+        if (fs.existsSync(localPath)) {
+          localContent = fs.readFileSync(localPath, 'utf8');
+        }
+
+        if (remoteContent && remoteContent !== localContent) {
+          const dir = path.dirname(localPath);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(localPath, remoteContent, 'utf8');
+          filesChanged++;
+        }
+      } catch (fErr) {}
+    }
+
+    lastAppliedCommitSha = latestSha;
+
+    if (filesChanged > 0) {
+      console.log(`[Auto-Updater] ${filesChanged} arquivo(s) atualizados com sucesso (${latestSha.substring(0, 7)})!`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app-updated', {
+          filesChanged,
+          commitSha: latestSha.substring(0, 7)
+        });
+      }
+      return { updated: true, filesChanged, commitSha: latestSha.substring(0, 7) };
+    }
+
+    return { updated: false, message: 'App já está na versão mais recente!' };
+  } catch (err) {
+    return { updated: false, error: err.message };
+  }
+}
+
+ipcMain.handle('check-app-update', async () => {
+  return await checkForUpdates(false);
+});
+
+ipcMain.handle('reload-app', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.reload();
+  }
+  return true;
+});
 
 // Configuração 100% Automática de Isolamento de Áudio (Estilo Parsec/Discord no Linux)
 async function setupAutomaticAudioIsolation() {
@@ -188,6 +299,10 @@ app.whenReady().then(() => {
 
   createWindow();
   setupAutomaticAudioIsolation();
+
+  // Auto-Updater: Verifica atualizações automaticamente ao abrir e a cada 2 minutos
+  setTimeout(() => { checkForUpdates(true); }, 3000);
+  setInterval(() => { checkForUpdates(true); }, 120000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

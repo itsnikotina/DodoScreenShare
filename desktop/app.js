@@ -47,6 +47,8 @@ const dom = {
   serverUrlInput: document.getElementById('serverUrlInput'),
   btnApplyServerUrl: document.getElementById('btnApplyServerUrl'),
   btnOpenDiscordActivity: document.getElementById('btnOpenDiscordActivity'),
+  btnCheckUpdates: document.getElementById('btnCheckUpdates'),
+  btnCheckUpdatesText: document.getElementById('btnCheckUpdatesText'),
 
   btnOpenSourcePicker: document.getElementById('btnOpenSourcePicker'),
   btnStopStream: document.getElementById('btnStopStream'),
@@ -886,6 +888,48 @@ dom.btnClearLogs.addEventListener('click', () => {
   dom.logsTerminal.innerHTML = '';
   dom.logCountBadge.textContent = '0';
 });
+
+// Auto-Updater In-App
+if (dom.btnCheckUpdates) {
+  dom.btnCheckUpdates.addEventListener('click', async () => {
+    if (!window.electronAPI || !window.electronAPI.checkAppUpdate) return;
+    
+    dom.btnCheckUpdates.disabled = true;
+    if (dom.btnCheckUpdatesText) dom.btnCheckUpdatesText.textContent = 'Verificando...';
+    log('🔍 Verificando se há novas atualizações no GitHub...', 'info');
+
+    try {
+      const res = await window.electronAPI.checkAppUpdate();
+      if (res && res.updated) {
+        log(`🎉 Atualização baixada com sucesso (${res.filesChanged} arquivos)! Reiniciando...`, 'success');
+        if (dom.btnCheckUpdatesText) dom.btnCheckUpdatesText.textContent = 'Reiniciando...';
+        setTimeout(() => {
+          if (window.electronAPI.reloadApp) window.electronAPI.reloadApp();
+        }, 1500);
+      } else {
+        log('✅ O aplicativo já está na versão mais recente!', 'success');
+        if (dom.btnCheckUpdatesText) dom.btnCheckUpdatesText.textContent = 'Em dia!';
+        setTimeout(() => {
+          if (dom.btnCheckUpdatesText) dom.btnCheckUpdatesText.textContent = 'Atualizações';
+          dom.btnCheckUpdates.disabled = false;
+        }, 3000);
+      }
+    } catch (err) {
+      log(`Aviso ao checar atualizações: ${err.message}`, 'warn');
+      if (dom.btnCheckUpdatesText) dom.btnCheckUpdatesText.textContent = 'Atualizações';
+      dom.btnCheckUpdates.disabled = false;
+    }
+  });
+}
+
+if (window.electronAPI && window.electronAPI.onAppUpdated) {
+  window.electronAPI.onAppUpdated((info) => {
+    log(`🚀 Nova atualização do Dodo Desktop aplicada em segundo plano! Recarregando...`, 'success');
+    setTimeout(() => {
+      if (window.electronAPI.reloadApp) window.electronAPI.reloadApp();
+    }, 2000);
+  });
+}
 
 // Inicialização
 dom.serverUrlInput.value = state.serverUrl;
