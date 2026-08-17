@@ -22,4 +22,8 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Finaliza instâncias anteriores para garantir carregamento limpo
+pkill -f "electron desktop/main.js" 2>/dev/null || true
+pkill -f "parec" 2>/dev/null || true
+
 npx electron desktop/main.js
