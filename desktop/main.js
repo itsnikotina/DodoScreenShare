@@ -54,6 +54,13 @@ ipcMain.handle('get-desktop-sources', async () => {
   }
 });
 
+let selectedSourceId = null;
+
+ipcMain.handle('set-active-capture-source', (event, sourceId) => {
+  selectedSourceId = sourceId;
+  return true;
+});
+
 // Informações do sistema e versão
 ipcMain.handle('get-app-info', () => {
   return {
@@ -64,13 +71,29 @@ ipcMain.handle('get-app-info', () => {
 });
 
 app.whenReady().then(() => {
-  // Permissões para captura de tela e áudio loopback
+  // Permissões completas para captura de tela e áudio loopback nativo
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
     return permission === 'media' || permission === 'display-capture';
   });
 
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     callback(true);
+  });
+
+  // Interceptador oficial do Electron para seleção de janela/tela sem diálogos
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+      const target = sources.find(s => s.id === selectedSourceId) || sources[0];
+      if (target) {
+        callback({ video: target, audio: 'loopback' });
+      } else {
+        callback({});
+      }
+    } catch (e) {
+      console.error('[Electron Main] Erro no setDisplayMediaRequestHandler:', e);
+      callback({});
+    }
   });
 
   createWindow();

@@ -428,58 +428,47 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
   else if (resolution === '480p') { maxW = 854; maxH = 480; }
 
   try {
-    // 1. Captura Nativa de Vídeo (desktopCapturer source)
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: sourceId,
-          minWidth: maxW,
-          maxWidth: maxW,
-          minHeight: maxH,
-          maxHeight: maxH,
-          minFrameRate: fps,
-          maxFrameRate: fps
-        }
-      }
-    });
+    if (window.electronAPI && window.electronAPI.setActiveCaptureSource) {
+      await window.electronAPI.setActiveCaptureSource(sourceId);
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: fps, max: fps },
+          width: { ideal: maxW, max: maxW },
+          height: { ideal: maxH, max: maxH }
+        },
+        audio: includeAudio
+      });
+    } catch (err1) {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      });
+    }
 
     state.localStream = stream;
     state.isHosting = true;
 
-    // 2. Captura de Áudio do Sistema (Loopback)
-    if (includeAudio) {
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      state.audioStream = stream;
+      initAudioVisualizer(stream);
+      startAudioStreamer(stream);
+      log('🔊 Áudio do sistema capturado com sucesso!', 'success');
+    } else if (includeAudio) {
       try {
-        log('Conectando entrada de áudio do sistema / loopback...', 'info');
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            mandatory: {
-              chromeMediaSource: 'desktop'
-            }
-          },
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
           video: false
         });
-
-        state.audioStream = audioStream;
-        initAudioVisualizer(audioStream);
-        startAudioStreamer(audioStream);
-        log('🔊 Áudio do sistema capturado com sucesso!', 'success');
-      } catch (audioErr) {
-        log(`ℹ️ Tentando captura de microfone/áudio padrão: ${audioErr.message}`, 'info');
-        try {
-          const micStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-            video: false
-          });
-          state.audioStream = micStream;
-          initAudioVisualizer(micStream);
-          startAudioStreamer(micStream);
-          log('🔊 Áudio conectado com sucesso!', 'success');
-        } catch (e) {
-          log('Aviso: Áudio não disponível.', 'warn');
-        }
-      }
+        state.audioStream = micStream;
+        initAudioVisualizer(micStream);
+        startAudioStreamer(micStream);
+        log('🔊 Áudio conectado com sucesso!', 'success');
+      } catch (e) {}
     }
 
     // UI Updates
@@ -505,13 +494,17 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     });
 
     // Inicia Anti-Lag Streamer e sinaliza ao servidor
-    sendSignal({
-      type: 'start-stream',
-      profile: {
-        username: 'Host Desktop',
-        avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
-      }
-    });
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      sendSignal({
+        type: 'start-stream',
+        profile: {
+          username: 'Host Desktop',
+          avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
+        }
+      });
+    } else {
+      log('⚠️ Servidor não conectado no momento. A transmissão local está ativa.', 'warn');
+    }
 
     startAntiLagStreamer(stream, fps);
     log('🎉 Transmissão iniciada! Os membros da call podem assistir agora na Atividade do Discord.', 'success');
