@@ -12,21 +12,64 @@ const __dirname = path.dirname(__filename);
 let mainWindow = null;
 let audioModuleSinkId = null;
 let audioModuleLoopbackId = null;
+let originalDefaultSink = null;
+let isolationInterval = null;
 
 // Configuração 100% Automática de Isolamento de Áudio (Estilo Parsec/Discord no Linux)
 async function setupAutomaticAudioIsolation() {
   if (process.platform !== 'linux') return;
   try {
+    // 1. Salva o dispositivo físico padrão original do usuário (fones de ouvido)
+    if (!originalDefaultSink) {
+      try {
+        const { stdout: defSinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
+        const trimmed = defSinkOut.trim();
+        if (trimmed && trimmed !== 'Dodo_Audio') {
+          originalDefaultSink = trimmed;
+        }
+      } catch (e) {}
+    }
+
+    // 2. Limpa instâncias anteriores
     await execAsync('pactl unload-module $(pactl list short modules | grep "sink_name=Dodo_Audio" | awk \'{print $1}\') 2>/dev/null || true');
     await execAsync('pactl unload-module $(pactl list short modules | grep "source=Dodo_Audio.monitor" | awk \'{print $1}\') 2>/dev/null || true');
 
+    // 3. Cria o canal de áudio Dodo_Audio
     const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio sink_properties=device.description="Dodo_Game_Audio"');
     audioModuleSinkId = sinkOut.trim();
 
-    const { stdout: loopOut } = await execAsync('pactl load-module module-loopback source=Dodo_Audio.monitor sink=@DEFAULT_SINK@ latency_msec=1');
+    // 4. Cria o loopback para os fones do usuário
+    const targetSink = originalDefaultSink || '@DEFAULT_SINK@';
+    const { stdout: loopOut } = await execAsync(`pactl load-module module-loopback source=Dodo_Audio.monitor sink="${targetSink}" latency_msec=1`);
     audioModuleLoopbackId = loopOut.trim();
 
-    console.log('[Audio Isolation] Canal virtual Dodo_Audio inicializado com sucesso!');
+    // 5. Direciona os jogos/sistema para Dodo_Audio
+    await execAsync('pactl set-default-sink Dodo_Audio');
+
+    // 6. Move imediatamente e continuamente o Discord para os fones físicos (Zero eco na live)
+    async function isolateDiscordAudio() {
+      try {
+        const { stdout: inputsOut } = await execAsync('pactl list sink-inputs');
+        const blocks = inputsOut.split(/Entrada do destino #|Sink Input #/).filter(Boolean);
+        for (const block of blocks) {
+          const idMatch = block.match(/^(\d+)/);
+          if (!idMatch) continue;
+          const inputId = idMatch[1];
+          const isDiscord = /application\.process\.binary\s*=\s*"Discord"|application\.name\s*=\s*"WEBRTC VoiceEngine"|application\.name\s*=\s*"Discord"/i.test(block);
+          if (isDiscord) {
+            const hwSink = originalDefaultSink || '@DEFAULT_SINK@';
+            await execAsync(`pactl move-sink-input ${inputId} "${hwSink}" 2>/dev/null || true`);
+          }
+        }
+      } catch (e) {}
+    }
+
+    await isolateDiscordAudio();
+
+    if (isolationInterval) clearInterval(isolationInterval);
+    isolationInterval = setInterval(isolateDiscordAudio, 2000);
+
+    console.log('[Audio Isolation] Isolamento ativo! Jogos -> Dodo_Audio | Discord -> Fones físicos.');
   } catch (err) {
     console.warn('[Audio Isolation] Inicialização do canal de áudio:', err.message);
   }
@@ -35,6 +78,13 @@ async function setupAutomaticAudioIsolation() {
 async function cleanupAudioIsolation() {
   if (process.platform !== 'linux') return;
   try {
+    if (isolationInterval) {
+      clearInterval(isolationInterval);
+      isolationInterval = null;
+    }
+    if (originalDefaultSink) {
+      await execAsync(`pactl set-default-sink "${originalDefaultSink}" 2>/dev/null || true`);
+    }
     if (audioModuleLoopbackId) await execAsync(`pactl unload-module ${audioModuleLoopbackId} 2>/dev/null || true`);
     if (audioModuleSinkId) await execAsync(`pactl unload-module ${audioModuleSinkId} 2>/dev/null || true`);
   } catch (e) {}
@@ -137,6 +187,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  setupAutomaticAudioIsolation();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
