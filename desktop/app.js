@@ -514,10 +514,15 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
 
           const audioConstraints = {
             deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
+            channelCount: { ideal: 2, min: 2 },
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
-            channelCount: 2
+            googEchoCancellation: false,
+            googAutoGainControl: false,
+            googNoiseSuppression: false,
+            googHighpassFilter: false,
+            googStereo: true
           };
 
           const audioStream = await navigator.mediaDevices.getUserMedia({
@@ -623,7 +628,14 @@ function startAudioStreamer(audioStream) {
     }
 
     const source = state.hostAudioCtx.createMediaStreamSource(audioStream);
+    source.channelCount = 2;
+    source.channelCountMode = 'explicit';
+    source.channelInterpretation = 'speakers';
+
     state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(1024, 2, 2);
+    state.scriptProcessor.channelCount = 2;
+    state.scriptProcessor.channelCountMode = 'explicit';
+    state.scriptProcessor.channelInterpretation = 'speakers';
 
     let sentChunks = 0;
 
@@ -908,7 +920,7 @@ if (dom.btnCheckUpdates) {
 
 if (window.electronAPI && window.electronAPI.onAppUpdated) {
   window.electronAPI.onAppUpdated((info) => {
-    log(`🚀 Nova atualização do Dodo Desktop aplicada em segundo plano! Recarregando...`, 'success');
+    log(`���� Nova atualização do Dodo Desktop aplicada em segundo plano! Recarregando...`, 'success');
     setTimeout(() => {
       if (window.electronAPI.reloadApp) window.electronAPI.reloadApp();
     }, 2000);

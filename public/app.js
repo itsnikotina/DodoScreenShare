@@ -1525,6 +1525,9 @@ function ensureViewerAudioContext() {
       const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
       state.viewerAudioCtx = new AudioCtxClass({ latencyHint: 'interactive', sampleRate: 48000 });
       state.viewerGainNode = state.viewerAudioCtx.createGain();
+      state.viewerGainNode.channelCount = 2;
+      state.viewerGainNode.channelCountMode = 'explicit';
+      state.viewerGainNode.channelInterpretation = 'speakers';
       state.viewerGainNode.connect(state.viewerAudioCtx.destination);
       applyVolumeGain();
       state.audioNextPlayTime = state.viewerAudioCtx.currentTime;
