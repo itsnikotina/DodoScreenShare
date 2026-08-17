@@ -54,7 +54,6 @@ const dom = {
   selectResolution: document.getElementById('selectResolution'),
   selectFps: document.getElementById('selectFps'),
   chkSystemAudio: document.getElementById('chkSystemAudio'),
-  selectAudioDevice: document.getElementById('selectAudioDevice'),
 
   audioVuBar: document.getElementById('audioVuBar'),
   audioDbText: document.getElementById('audioDbText'),
@@ -92,7 +91,6 @@ const dom = {
   modalSelectResolution: document.getElementById('modalSelectResolution'),
   modalSelectFps: document.getElementById('modalSelectFps'),
   modalChkSystemAudio: document.getElementById('modalChkSystemAudio'),
-  modalSelectAudioDevice: document.getElementById('modalSelectAudioDevice'),
 
   // Modal Activity Link
   modalActivityLink: document.getElementById('modalActivityLink'),
@@ -326,7 +324,6 @@ function escapeHtml(str) {
 // ==========================================
 async function openSourcePickerModal() {
   dom.modalSourcePicker.classList.remove('hidden');
-  await populateAudioDevices();
   await refreshDesktopSources();
 }
 
@@ -438,60 +435,19 @@ async function confirmSourceSelection() {
   const res = dom.modalSelectResolution.value;
   const fps = dom.modalSelectFps.value;
   const audio = dom.modalChkSystemAudio.checked;
-  const audioDev = dom.modalSelectAudioDevice ? dom.modalSelectAudioDevice.value : 'default';
 
   dom.selectResolution.value = res;
   dom.selectFps.value = fps;
   dom.chkSystemAudio.checked = audio;
-  if (dom.selectAudioDevice) dom.selectAudioDevice.value = audioDev;
 
   closeSourcePickerModal();
-  await startNativeScreenSharing(state.selectedSourceId, res, Number(fps), audio, audioDev);
-}
-
-async function populateAudioDevices() {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputs = devices.filter(d => d.kind === 'audioinput');
-
-    let selectedId = 'default';
-    const isolatedOptions = [];
-    const regularOptions = [];
-
-    audioInputs.forEach((dev, idx) => {
-      if (dev.deviceId && dev.deviceId !== 'default') {
-        const label = dev.label || `Canal ${idx + 1}`;
-        const isDodoIsolated = label.toLowerCase().includes('dodo') || label.toLowerCase().includes('null');
-        if (isDodoIsolated) {
-          selectedId = dev.deviceId;
-          isolatedOptions.push(`<option value="${dev.deviceId}">🛡️ [ISOLAMENTO DISCORD ATIVO] ${escapeHtml(label)}</option>`);
-        } else {
-          regularOptions.push(`<option value="${dev.deviceId}">🔊 ${escapeHtml(label)}</option>`);
-        }
-      }
-    });
-
-    const options = [
-      ...isolatedOptions,
-      '<option value="default">🔊 Áudio do Sistema / Padrão</option>',
-      ...regularOptions
-    ];
-
-    if (dom.selectAudioDevice) {
-      dom.selectAudioDevice.innerHTML = options.join('');
-      dom.selectAudioDevice.value = selectedId;
-    }
-    if (dom.modalSelectAudioDevice) {
-      dom.modalSelectAudioDevice.innerHTML = options.join('');
-      dom.modalSelectAudioDevice.value = selectedId;
-    }
-  } catch (e) {}
+  await startNativeScreenSharing(state.selectedSourceId, res, Number(fps), audio);
 }
 
 // ==========================================
 // Captura Nativa & Streaming WebRTC
 // ==========================================
-async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30, includeAudio = true, audioDeviceId = 'default') {
+async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30, includeAudio = true) {
   log(`================ INICIANDO TRANSMISSÃO DESKTOP NATIVA ===============`, 'info');
   log(`ID da Fonte: "${sourceId}" | Resolução: ${resolution} @ ${fps} FPS | Áudio: ${includeAudio ? 'SIM' : 'NÃO'}`, 'info');
 
@@ -525,7 +481,7 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     state.localStream = stream;
     state.isHosting = true;
 
-    // Captura de Áudio do Sistema (Estéreo HD)
+    // Captura de Áudio do Sistema (Estéreo HD 48kHz)
     if (includeAudio) {
       const displayAudioTracks = stream.getAudioTracks();
       
@@ -538,7 +494,6 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
         // Captura de áudio de sistema / monitor loopback via Web Audio API
         try {
           const audioConstraints = {
-            deviceId: audioDeviceId && audioDeviceId !== 'default' ? { exact: audioDeviceId } : undefined,
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
@@ -903,4 +858,3 @@ dom.btnClearLogs.addEventListener('click', () => {
 dom.serverUrlInput.value = state.serverUrl;
 initWebSocket();
 startFpsMonitor();
-populateAudioDevices();
