@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron desktop/main.js",
     "desktop": "electron desktop/main.js",
-    "server": "node server.js",
+    "server": "node --watch server.js",
     "dev:server": "node --watch server.js",
     "tunnel:cloudflared": "cloudflared tunnel --url http://localhost:3000",
     "tunnel:localtunnel": "npx localtunnel --port 3000",

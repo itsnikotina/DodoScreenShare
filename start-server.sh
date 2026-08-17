@@ -52,12 +52,12 @@ trap cleanup SIGINT SIGTERM
 
 case $OPTION in
     1)
-        echo -e "${GREEN}[INICIANDO] Servidor rodando em http://localhost:3000...${NC}"
-        node server.js
+        echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload (--watch) em http://localhost:3000...${NC}"
+        node --watch server.js
         ;;
     2)
-        echo -e "${GREEN}[INICIANDO] Servidor local e gerando link HTTPS via LocalTunnel...${NC}"
-        node server.js &
+        echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload (--watch) e gerando link HTTPS via LocalTunnel...${NC}"
+        node --watch server.js &
         sleep 2
         echo -e "${CYAN}[TÚNEL] Gerando URL pública para o Discord...${NC}"
         npx --yes localtunnel --port 3000
@@ -65,10 +65,10 @@ case $OPTION in
     3)
         if ! command -v cloudflared &> /dev/null; then
             echo -e "${RED}[AVISO] 'cloudflared' não encontrado. Iniciando somente o servidor...${NC}"
-            node server.js
+            node --watch server.js
         else
-            echo -e "${GREEN}[INICIANDO] Servidor e túnel Cloudflare...${NC}"
-            node server.js &
+            echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload e túnel Cloudflare...${NC}"
+            node --watch server.js &
             sleep 2
             cloudflared tunnel --url http://localhost:3000
         fi
@@ -76,16 +76,16 @@ case $OPTION in
     4)
         if ! command -v ngrok &> /dev/null; then
             echo -e "${RED}[AVISO] 'ngrok' não encontrado. Iniciando somente o servidor...${NC}"
-            node server.js
+            node --watch server.js
         else
-            echo -e "${GREEN}[INICIANDO] Servidor e túnel Ngrok...${NC}"
-            node server.js &
+            echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload e túnel Ngrok...${NC}"
+            node --watch server.js &
             sleep 2
             ngrok http 3000
         fi
         ;;
     *)
-        echo -e "${GREEN}[INICIANDO] Servidor padrão local...${NC}"
-        node server.js
+        echo -e "${GREEN}[INICIANDO] Servidor com Auto-Reload (--watch)...${NC}"
+        node --watch server.js
         ;;
 esac
