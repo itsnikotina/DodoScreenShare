@@ -47,32 +47,24 @@ Como nada disso deveria ser interrompido por decisões externas ou restrições 
 
 ---
 
-## ⚙️ Como Executar Localmente
+## ⚙️ Como Executar
 
 ### 1. Instalar Dependências
 ```bash
 npm install
 ```
 
-### 2. Configurar Variáveis de Ambiente (`.env`)
-```env
-PORT=3000
-DISCORD_CLIENT_ID=787371101177118750
-DISCORD_CLIENT_SECRET=seu_client_secret_aqui
-```
-
-### 3. Iniciar Servidor
+### 2. Iniciar o Servidor de Sinalização (Backend)
 ```bash
-npm start
+npm run server
 ```
 
----
+### 3. Iniciar o Aplicativo Desktop Nativo (Host)
+```bash
+npm run desktop
+```
 
-## ☁️ Deploy na Render.com
+No aplicativo desktop, selecione a tela/janela de aplicativo desejada com resolução de até 1080p @ 60 FPS e áudio do sistema ativado!
 
-1. Crie um **Web Service** na Render conectado ao repositório GitHub.
-2. Configure:
-   - **Build Command:** `npm install`
-   - **Start Command:** `node server.js`
-3. Adicione as variáveis de ambiente `PORT`, `DISCORD_CLIENT_ID` e `DISCORD_CLIENT_SECRET`.
-4. Adicione a URL gerada no seu **Discord Developer Portal -> Activities -> URL Mappings**.
+### 4. Assistir pelo Discord
+Os membros da chamada de voz no Discord só precisam abrir a **Atividade do Dodo** na chamada para assistir à transmissão com áudio e baixa latência.
