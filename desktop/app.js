@@ -132,7 +132,15 @@ function getWsUrl(httpUrl) {
 }
 
 function initWebSocket() {
+  if (state.reconnectTimeout) {
+    clearTimeout(state.reconnectTimeout);
+    state.reconnectTimeout = null;
+  }
+
   if (state.ws) {
+    state.ws.onclose = null;
+    state.ws.onerror = null;
+    state.ws.onmessage = null;
     try { state.ws.close(); } catch (e) {}
   }
 
@@ -148,6 +156,10 @@ function initWebSocket() {
   }
 
   state.ws.onopen = () => {
+    if (state.reconnectTimeout) {
+      clearTimeout(state.reconnectTimeout);
+      state.reconnectTimeout = null;
+    }
     log('✅ Conectado com sucesso ao Servidor de Sinalização!', 'success');
     dom.wsStatusDot.className = 'status-dot connected';
 
@@ -160,6 +172,18 @@ function initWebSocket() {
         avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
       }
     });
+
+    // Se já estiver transmitindo na máquina local, registra imediatamente no servidor
+    if (state.isHosting && state.localStream) {
+      log('🔄 Sincronizando transmissão ativa no servidor...', 'info');
+      sendSignal({
+        type: 'start-stream',
+        profile: {
+          username: 'Host Desktop',
+          avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
+        }
+      });
+    }
   };
 
   state.ws.onmessage = async (event) => {
@@ -173,9 +197,14 @@ function initWebSocket() {
   };
 
   state.ws.onclose = () => {
-    log('⚠️ WebSocket desconectado. Tentando reconectar em 3 segundos...', 'warn');
     dom.wsStatusDot.className = 'status-dot';
-    setTimeout(initWebSocket, 3000);
+    if (!state.reconnectTimeout) {
+      log('⚠️ WebSocket desconectado. Tentando reconectar em 3 segundos...', 'warn');
+      state.reconnectTimeout = setTimeout(() => {
+        state.reconnectTimeout = null;
+        initWebSocket();
+      }, 3000);
+    }
   };
 
   state.ws.onerror = (err) => {
