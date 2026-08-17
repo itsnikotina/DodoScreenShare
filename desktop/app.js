@@ -542,8 +542,6 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
 
     // UI Updates
     dom.liveVideoPreview.srcObject = stream;
-    dom.liveVideoPreview.muted = true;
-    dom.liveVideoPreview.play().catch(() => {});
     dom.liveVideoPreview.classList.remove('hidden');
     dom.previewPlaceholder.classList.add('hidden');
     dom.liveStreamBadge.classList.remove('hidden');
