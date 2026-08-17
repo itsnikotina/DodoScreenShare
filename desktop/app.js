@@ -489,53 +489,89 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
         await window.electronAPI.ensureAudioIsolation();
       }
 
-      const displayAudioTracks = stream.getAudioTracks();
-      
-      if (displayAudioTracks.length > 0) {
-        state.audioStream = stream;
-        initAudioVisualizer(stream);
-        startAudioStreamer(stream);
-        log('🔊 Áudio nativo da aplicação conectado com sucesso!', 'success');
-      } else {
+      // Tenta primeiro o pipeline nativo via parec (estéreo 48kHz verdadeiro no Linux)
+      // Isso bypassa o bug do Chromium que força mono no getUserMedia no Linux
+      let nativeStereoStarted = false;
+      if (window.electronAPI && window.electronAPI.startNativeStereoAudio) {
         try {
-          // Busca automática pelo canal virtual isolado (Zero eco do Discord)
-          let targetDeviceId = undefined;
+          nativeStereoStarted = await window.electronAPI.startNativeStereoAudio();
+        } catch (e) {}
+      }
+
+      if (nativeStereoStarted) {
+        // Pipeline nativo: recebe chunks PCM raw de parec e envia ao servidor
+        let sentChunks = 0;
+        window.electronAPI.onNativeAudioChunk((payload) => {
+          if (!state.isHosting) return;
+          sendSignal({ type: 'stream-audio', audio: payload });
+
+          sentChunks++;
+          if (sentChunks === 1 || sentChunks % 300 === 0) {
+            // Diagnóstico rápido dos primeiros bytes
+            try {
+              const bytes = Uint8Array.from(atob(payload.b64), c => c.charCodeAt(0));
+              const s16 = new Int16Array(bytes.buffer);
+              let sumL = 0, sumR = 0;
+              for (let i = 0; i < s16.length; i += 2) {
+                sumL += (s16[i] / 32768) ** 2;
+                sumR += (s16[i + 1] / 32768) ** 2;
+              }
+              const rmsL = Math.sqrt(sumL / (s16.length / 2));
+              const rmsR = Math.sqrt(sumR / (s16.length / 2));
+              log(`🔊 Estéreo Nativo [E: ${(rmsL * 100).toFixed(0)}% | D: ${(rmsR * 100).toFixed(0)}%] (bloco ${sentChunks})`, 'info');
+            } catch (e) {}
+          }
+        });
+        log('🔊 Áudio nativo da aplicação conectado com sucesso! (Estéreo 48kHz via parec)', 'success');
+      } else {
+        // Fallback: getUserMedia (pode ser mono no Linux — fallback apenas para Windows/Mac)
+        const displayAudioTracks = stream.getAudioTracks();
+
+        if (displayAudioTracks.length > 0) {
+          state.audioStream = stream;
+          initAudioVisualizer(stream);
+          startAudioStreamer(stream);
+          log('🔊 Áudio da tela conectado (fallback getUserMedia).', 'success');
+        } else {
           try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const isolatedDev = devices.find(d => 
-              d.kind === 'audioinput' && 
-              (d.label.toLowerCase().includes('dodo') || d.label.toLowerCase().includes('null') || d.label.toLowerCase().includes('loopback'))
-            );
-            if (isolatedDev) {
-              targetDeviceId = isolatedDev.deviceId;
-              log(`🛡️ Isolamento automático ativo: usando canal "${isolatedDev.label}"`, 'info');
-            }
-          } catch (e) {}
+            let targetDeviceId = undefined;
+            try {
+              const devices = await navigator.mediaDevices.enumerateDevices();
+              const isolatedDev = devices.find(d =>
+                d.kind === 'audioinput' &&
+                (d.label.toLowerCase().includes('dodo') || d.label.toLowerCase().includes('null') || d.label.toLowerCase().includes('loopback'))
+              );
+              if (isolatedDev) {
+                targetDeviceId = isolatedDev.deviceId;
+                log(`🛡️ Isolamento automático ativo: usando canal "${isolatedDev.label}"`, 'info');
+              }
+            } catch (e) {}
 
-          const audioConstraints = {
-            deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
-            channelCount: { ideal: 2, min: 2 },
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            googEchoCancellation: false,
-            googAutoGainControl: false,
-            googNoiseSuppression: false,
-            googHighpassFilter: false,
-            googStereo: true
-          };
+            const audioConstraints = {
+              deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
+              channelCount: { ideal: 2, min: 2 },
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              googEchoCancellation: false,
+              googAutoGainControl: false,
+              googNoiseSuppression: false,
+              googHighpassFilter: false,
+              googStereo: true
+            };
 
-          const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: audioConstraints,
-            video: false
-          });
+            const audioStream = await navigator.mediaDevices.getUserMedia({
+              audio: audioConstraints,
+              video: false
+            });
 
-          state.audioStream = audioStream;
-          initAudioVisualizer(audioStream);
-          startAudioStreamer(audioStream);
-          log('🔊 Áudio do sistema conectado e transmitindo em Estéreo HD!', 'success');
-        } catch (audioErr) {
-          log(`Erro ao conectar áudio: ${audioErr.message}`, 'error');
+            state.audioStream = audioStream;
+            initAudioVisualizer(audioStream);
+            startAudioStreamer(audioStream);
+            log('🔊 Áudio do sistema conectado (fallback getUserMedia).', 'success');
+          } catch (audioErr) {
+            log(`Erro ao conectar áudio: ${audioErr.message}`, 'error');
+          }
         }
       }
     }
@@ -795,6 +831,11 @@ function stopSharing() {
   if (state.audioStream) {
     state.audioStream.getTracks().forEach(t => t.stop());
     state.audioStream = null;
+  }
+
+  // Para o processo parec nativo de áudio estéreo
+  if (window.electronAPI && window.electronAPI.stopNativeStereoAudio) {
+    window.electronAPI.stopNativeStereoAudio().catch(() => {});
   }
 
   sendSignal({ type: 'stop-stream' });
