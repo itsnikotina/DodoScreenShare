@@ -128,7 +128,7 @@ ipcMain.handle('reload-app', () => {
 
 // Captura Direta de Áudio Nativo em Estéreo 48kHz (L/R) via PulseAudio/PipeWire (parec)
 ipcMain.handle('start-native-stereo-audio', async () => {
-  if (process.platform !== 'linux') return false;
+  if (process.platform !== 'linux') return { success: false, error: 'Não é Linux' };
 
   try {
     if (nativeAudioProcess) {
@@ -136,26 +136,47 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       nativeAudioProcess = null;
     }
 
-    // Garante que o sink Dodo_Audio está carregado
-    await setupAutomaticAudioIsolation();
+    // Tenta configurar isolamento
+    try {
+      await setupAutomaticAudioIsolation();
+    } catch (e) {
+      console.warn('[Audio Isolation] Aviso:', e.message);
+    }
 
-    // Tenta gravar de Dodo_Audio.monitor ou monitor padrão
-    const spawnParec = (device) => {
-      const args = [
-        '--format=s16le',
-        '--rate=48000',
-        '--channels=2',
-        '--latency-msec=20'
-      ];
-      if (device) args.push('-d', device);
-      return spawn('parec', args);
-    };
+    // Procura se Dodo_Audio.monitor existe, senão grava do monitor padrão
+    let targetDevice = null;
+    try {
+      const { stdout: sources } = await execAsync('pactl list short sources 2>/dev/null || true');
+      if (sources.includes('Dodo_Audio.monitor')) {
+        targetDevice = 'Dodo_Audio.monitor';
+      }
+    } catch (e) {}
 
-    let p = spawnParec('Dodo_Audio.monitor');
-    let hasReceivedData = false;
+    const args = [
+      '--format=s16le',
+      '--rate=48000',
+      '--channels=2',
+      '--latency-msec=20'
+    ];
+    if (targetDevice) {
+      args.push('-d', targetDevice);
+    }
+
+    let p = null;
+    let toolName = 'parec';
+    try {
+      p = spawn('parec', args);
+    } catch (err) {
+      // Fallback para pw-record (PipeWire nativo)
+      try {
+        toolName = 'pw-record';
+        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-']);
+      } catch (err2) {
+        return { success: false, error: 'Nem parec nem pw-record encontrados no sistema.' };
+      }
+    }
 
     p.stdout.on('data', (chunk) => {
-      hasReceivedData = true;
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('native-audio-chunk', {
           b64: chunk.toString('base64'),
@@ -166,19 +187,19 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     });
 
     p.stderr.on('data', (errData) => {
-      console.warn('[Native Audio Parec stderr]:', errData.toString());
+      console.warn(`[Native Audio ${toolName} stderr]:`, errData.toString());
     });
 
     p.on('error', (err) => {
-      console.warn('[Native Audio] Parec spawn error:', err.message);
+      console.warn(`[Native Audio] ${toolName} erro:`, err.message);
     });
 
     nativeAudioProcess = p;
-    console.log('[Native Audio] Captura de áudio Estéreo HD (parec 48kHz 2ch) iniciada!');
-    return true;
+    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch, dispositivo: ${targetDevice || 'Padrão'}) iniciada!`);
+    return { success: true, tool: toolName, device: targetDevice || 'default' };
   } catch (err) {
-    console.warn('[Native Audio] Falha ao iniciar parec:', err.message);
-    return false;
+    console.warn('[Native Audio] Falha ao iniciar áudio nativo:', err.message);
+    return { success: false, error: err.message };
   }
 });
 
