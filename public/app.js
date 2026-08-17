@@ -372,6 +372,12 @@ async function syncVoiceChannelParticipants() {
   try {
     const data = await discordSdk.commands.getInstanceConnectedParticipants();
     if (data && data.participants && Array.isArray(data.participants)) {
+      if (data.participants.length === 0 && state.isHosting) {
+        log('🚪 A chamada do Discord ficou vazia. Encerrando transmissão...', 'info');
+        stopSharing();
+        return;
+      }
+
       const channelUsers = data.participants.map(p => {
         let avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
         if (p.avatar) {
@@ -703,6 +709,14 @@ async function handleSignalMessage(msg) {
     // Atualização dos espectadores que estão assistindo MINHA tela
     case 'stream-viewers-updated':
       updateHostViewersList(msg.viewers || [], msg.total || 0, msg.discordCount || 0, msg.webCount || 0);
+      break;
+
+    // Sala/Chamada esvaziada no Discord
+    case 'call-empty-stop-stream':
+      log('🚪 Todos os membros saíram da chamada do Discord. Transmissão encerrada automaticamente.', 'warn');
+      if (state.isHosting) {
+        stopSharing();
+      }
       break;
 
     case 'new-viewer':
@@ -1194,9 +1208,13 @@ async function startScreenSharing() {
       updateActiveStreamHeader(state.userProfile);
     }
 
-    stream.getVideoTracks()[0].addEventListener('ended', () => {
-      log('O compartilhamento foi encerrado.', 'warn');
-      stopSharing();
+    stream.getTracks().forEach((track) => {
+      track.addEventListener('ended', () => {
+        log(`A captura da faixa (${track.kind}) foi finalizada.`, 'warn');
+        if (state.isHosting) {
+          stopSharing();
+        }
+      });
     });
 
     sendSignal({
@@ -2397,3 +2415,21 @@ if (!isInsideDiscordActivity()) {
   dom.placeholderText.textContent = 'Painel de Transmissão do Host';
   dom.placeholderTip.textContent = 'Clique no botão acima para selecionar a janela ou tela que deseja transmitir.';
 }
+
+// ==========================================
+// Auto-Encerramento ao Fechar Janela ou Sair da Chamada
+// ==========================================
+function handleAppCleanupOnExit() {
+  if (state.isHosting) {
+    stopSharing();
+  }
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    try {
+      state.ws.send(JSON.stringify({ type: 'stop-stream', roomId: state.roomId }));
+      state.ws.close();
+    } catch (e) {}
+  }
+}
+
+window.addEventListener('beforeunload', handleAppCleanupOnExit);
+window.addEventListener('pagehide', handleAppCleanupOnExit);

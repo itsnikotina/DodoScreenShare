@@ -739,17 +739,47 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     console.log(`[WebSocket] Desconectado: ID ${peerId}`);
-    rooms.forEach((r) => {
+    rooms.forEach((r, rId) => {
       if (r.hosts.has(peerId)) {
-        console.log(`Host ${peerId} desconectou.`);
+        const host = r.hosts.get(peerId);
+        console.log(`[Sala ${rId}] ⏹️ Host ${host?.profile?.username || peerId} desconectou. Encerrando transmissão.`);
+
+        // Notifica todos que estavam assistindo esse host que a live encerrou
+        rooms.forEach((allRoom) => {
+          allRoom.participants.forEach((p) => {
+            if (p.watchingHostId === peerId && p.ws.readyState === WebSocket.OPEN) {
+              p.ws.send(JSON.stringify({
+                type: 'watched-stream-ended',
+                hostId: peerId
+              }));
+              p.watchingHostId = null;
+            }
+          });
+        });
+
         r.hosts.delete(peerId);
       }
+
       if (r.participants.has(peerId)) {
         const p = r.participants.get(peerId);
         if (p.watchingHostId) {
           notifyHostViewers(null, p.watchingHostId);
         }
         r.participants.delete(peerId);
+      }
+
+      // Se não sobrou nenhum participante na chamada do Discord nesta sala, avisa os hosts para encerrarem
+      const discordParticipants = Array.from(r.participants.values()).filter(p => p.platform === 'discord');
+      if (discordParticipants.length === 0 && r.hosts.size > 0) {
+        console.log(`[Sala ${rId}] 🚪 Todos os membros do Discord saíram da chamada. Avisando host para parar.`);
+        r.hosts.forEach((h) => {
+          if (h.ws && h.ws.readyState === WebSocket.OPEN) {
+            h.ws.send(JSON.stringify({
+              type: 'call-empty-stop-stream',
+              message: 'Todos os participantes saíram da chamada do Discord.'
+            }));
+          }
+        });
       }
     });
 
