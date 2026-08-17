@@ -933,6 +933,54 @@ if (window.electronAPI && window.electronAPI.onAppUpdated) {
   });
 }
 
+// Botão de Teste de Áudio Estéreo (L / R)
+const btnTestStereo = document.getElementById('btnTestStereo');
+if (btnTestStereo) {
+  btnTestStereo.addEventListener('click', () => {
+    log('🎧 Enviando sinal de teste: 2s no fone ESQUERDO e depois 2s no fone DIREITO...', 'info');
+    const sampleRate = 48000;
+    const durationSec = 4;
+    const totalSamples = sampleRate * durationSec;
+    const interleaved = new Int16Array(totalSamples * 2);
+
+    for (let i = 0; i < totalSamples; i++) {
+      const t = i / sampleRate;
+      let left = 0;
+      let right = 0;
+
+      if (t < 2.0) {
+        // 440 Hz (Lá) 100% no canal Esquerdo (Direito = 0)
+        left = Math.sin(2 * Math.PI * 440 * t) * 0.4;
+      } else {
+        // 880 Hz (Lá agudo) 100% no canal Direito (Esquerdo = 0)
+        right = Math.sin(2 * Math.PI * 880 * t) * 0.4;
+      }
+
+      interleaved[i * 2] = left < 0 ? left * 0x8000 : left * 0x7FFF;
+      interleaved[i * 2 + 1] = right < 0 ? right * 0x8000 : right * 0x7FFF;
+    }
+
+    const bytes = new Uint8Array(interleaved.buffer);
+    let binary = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    const b64 = btoa(binary);
+
+    sendSignal({
+      type: 'stream-audio',
+      audio: {
+        b64,
+        sampleRate,
+        channels: 2
+      }
+    });
+
+    log('✅ Sinal de teste enviado com sucesso para todos na Atividade!', 'success');
+  });
+}
+
 // Inicialização
 dom.serverUrlInput.value = state.serverUrl;
 initWebSocket();

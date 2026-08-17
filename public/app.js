@@ -1557,12 +1557,8 @@ function renderIncomingFrame(frameData) {
   if (now - lastViewerFrameRenderTime < 32) return;
   lastViewerFrameRenderTime = now;
 
-  const canvas = dom.canvasPreview;
+  const canvas = dom.liveCanvas;
   if (!canvas) return;
-
-  if (dom.preview) dom.preview.classList.add('hidden');
-  if (dom.videoPlaceholder) dom.videoPlaceholder.classList.add('hidden');
-  canvas.classList.remove('hidden');
 
   const img = new Image();
   img.onload = () => {
@@ -1570,11 +1566,11 @@ function renderIncomingFrame(frameData) {
     let targetH = img.height;
 
     // Resolução dinâmica ajustável por espectador
-    if (state.viewerQuality === '480p') {
+    if (state.viewerResolution === '480p') {
       targetW = 854; targetH = 480;
-    } else if (state.viewerQuality === '720p') {
+    } else if (state.viewerResolution === '720p') {
       targetW = 1280; targetH = 720;
-    } else if (state.viewerQuality === '1080p') {
+    } else if (state.viewerResolution === '1080p') {
       targetW = 1920; targetH = 1080;
     }
 
@@ -1622,9 +1618,22 @@ function playIncomingAudioChunk(audioPayload) {
       const left = new Float32Array(samplesPerChannel);
       const right = new Float32Array(samplesPerChannel);
 
+      let sumL = 0;
+      let sumR = 0;
       for (let i = 0; i < samplesPerChannel; i++) {
         left[i] = floatArray[i * 2];
         right[i] = floatArray[i * 2 + 1];
+        sumL += left[i] * left[i];
+        sumR += right[i] * right[i];
+      }
+
+      const rmsL = Math.sqrt(sumL / samplesPerChannel);
+      const rmsR = Math.sqrt(sumR / samplesPerChannel);
+      const diff = Math.abs(rmsL - rmsR);
+
+      if (diff > 0.04 && (!window._lastStereoLog || Date.now() - window._lastStereoLog > 2000)) {
+        window._lastStereoLog = Date.now();
+        log(`🎧 Áudio Estéreo Separado: Canal E=${(rmsL * 100).toFixed(0)}% | Canal D=${(rmsR * 100).toFixed(0)}%`, 'info');
       }
 
       if (audioBuffer.copyToChannel) {
