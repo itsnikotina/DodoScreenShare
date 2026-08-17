@@ -15,10 +15,22 @@ echo -e "${CYAN}=====================================================${NC}"
 echo -e "${CYAN}🚀 DODO SCREEN SHARE - INICIALIZADOR AUTOMÁTICO${NC}"
 echo -e "${CYAN}=====================================================${NC}"
 
-# Se estiver em repositório Git, puxa as atualizações mais recentes automaticamente
-if [ -d ".git" ]; then
-  echo -e "${YELLOW}[1/3] Verificando e baixando atualizações do GitHub...${NC}"
-  git pull --rebase --autostash || true
+# Atualização automática: se tem Git usa Git; se não tem, baixa direto via curl/wget
+if command -v git &> /dev/null && [ -d ".git" ]; then
+  echo -e "${YELLOW}[1/3] Atualizando via Git...${NC}"
+  git pull --rebase --autostash 2>/dev/null || true
+else
+  echo -e "${YELLOW}[1/3] Baixando atualizações do GitHub (sem necessidade de Git)...${NC}"
+  mkdir -p desktop public
+  curl -fsSL https://raw.githubusercontent.com/itsnikotina/DodoScreenShare/main/desktop/app.js -o desktop/app.js 2>/dev/null || true
+  curl -fsSL https://raw.githubusercontent.com/itsnikotina/DodoScreenShare/main/desktop/main.js -o desktop/main.js 2>/dev/null || true
+  curl -fsSL https://raw.githubusercontent.com/itsnikotina/DodoScreenShare/main/desktop/index.html -o desktop/index.html 2>/dev/null || true
+fi
+
+# Verifica Node.js
+if ! command -v node &> /dev/null; then
+  echo -e "${YELLOW}[AVISO] Node.js não encontrado. Instale o Node.js em: https://nodejs.org${NC}"
+  exit 1
 fi
 
 # Instala dependências se necessário
