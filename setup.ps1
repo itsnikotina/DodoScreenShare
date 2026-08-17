@@ -1,5 +1,5 @@
 # Dodo Screen Share - Windows Auto Setup & Provisioner
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 Write-Host "=====================================================" -ForegroundColor Cyan
 Write-Host "🚀 DODO SCREEN SHARE - CONFIGURAÇÃO AUTOMÁTICA" -ForegroundColor Cyan
@@ -37,6 +37,11 @@ if (-not $hasSystemNode -and -not (Test-Path $nodeExe)) {
     Write-Host "Ambiente portátil pronto com sucesso!" -ForegroundColor Green
 }
 
+# Configura PATH do Node portátil
+if (Test-Path $nodeExe) {
+    $env:PATH = "$(Join-Path $baseDir 'bin\node');" + $env:PATH
+}
+
 # 2. Atualiza arquivos do repositório
 Write-Host "[2/4] Verificando e baixando atualizações do GitHub..." -ForegroundColor Yellow
 $desktopDir = Join-Path $baseDir "desktop"
@@ -61,23 +66,29 @@ foreach ($f in $files) {
 }
 Write-Host "Código atualizado para a versão mais recente!" -ForegroundColor Green
 
-# 3. Adiciona Node ao PATH se portátil
-if (Test-Path $nodeExe) {
-    $env:PATH = "$(Join-Path $baseDir 'bin\node');" + $env:PATH
-}
-
-# 4. Instala Electron se necessário
-$electronModule = Join-Path $baseDir "node_modules\electron"
-if (-not (Test-Path $electronModule)) {
-    Write-Host "[3/4] Configurando motor gráfico Electron (Apenas na 1ª vez)..." -ForegroundColor Yellow
+# 3. Instala dependências se necessário
+$electronExe = Join-Path $baseDir "node_modules\electron\dist\electron.exe"
+if (-not (Test-Path $electronExe)) {
+    Write-Host "[3/4] Configurando dependências do Electron (Apenas na 1ª vez)..." -ForegroundColor Yellow
     Set-Location $baseDir
-    & npm install --no-audit --no-fund
+    $npmPath = if (Test-Path "$baseDir\bin\node\npm.cmd") { "$baseDir\bin\node\npm.cmd" } else { "npm" }
+    & $npmPath install --no-audit --no-fund
 }
 
-# 5. Inicia o aplicativo
+# 4. Inicia o aplicativo
 Write-Host "[4/4] Iniciando Dodo Screen Share Desktop..." -ForegroundColor Green
 Write-Host "=====================================================" -ForegroundColor Cyan
 Write-Host ""
 
 Set-Location $baseDir
-& npx electron desktop/main.js
+$mainJs = Join-Path $baseDir "desktop\main.js"
+
+if (Test-Path $electronExe) {
+    & $electronExe $mainJs
+} else {
+    $nodeCmd = if (Test-Path $nodeExe) { $nodeExe } else { "node" }
+    $cliJs = Join-Path $baseDir "node_modules\electron\cli.js"
+    & $nodeCmd $cliJs $mainJs
+}
+
+Write-Host "Aplicativo finalizado." -ForegroundColor Yellow

@@ -9,8 +9,7 @@ echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
 
-if %ERRORLEVEL% NEQ 0 (
-  echo.
-  echo [AVISO] Ocorreu um problema ao executar. Pressione qualquer tecla para sair.
-  pause
-)
+echo.
+echo =====================================================
+echo Janela finalizada. Pressione qualquer tecla para fechar.
+pause
