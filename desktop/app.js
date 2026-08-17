@@ -454,23 +454,14 @@ async function populateAudioDevices() {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === 'audioinput');
 
-    const monitorOptions = [];
+    const options = ['<option value="default">🔊 Áudio do Sistema / Padrão</option>'];
 
     audioInputs.forEach((dev, idx) => {
-      if (dev.deviceId) {
-        const label = dev.label || '';
-        const isMic = label.toLowerCase().includes('micro') || label.toLowerCase().includes('mic') || label.toLowerCase().includes('fifine');
-        // Ignora e remove completamente qualquer microfone físico
-        if (!isMic) {
-          monitorOptions.push(`<option value="${dev.deviceId}">🔊 ${escapeHtml(label || `Saída de Som ${idx + 1}`)}</option>`);
-        }
+      if (dev.deviceId && dev.deviceId !== 'default') {
+        const label = dev.label || `Canal de Áudio ${idx + 1}`;
+        options.push(`<option value="${dev.deviceId}">🔊 ${escapeHtml(label)}</option>`);
       }
     });
-
-    const options = [
-      '<option value="default">🔊 Áudio do Jogo / Sistema (Padrão)</option>',
-      ...monitorOptions
-    ];
 
     if (dom.selectAudioDevice) dom.selectAudioDevice.innerHTML = options.join('');
     if (dom.modalSelectAudioDevice) dom.modalSelectAudioDevice.innerHTML = options.join('');
@@ -514,36 +505,37 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     state.localStream = stream;
     state.isHosting = true;
 
-    // Captura de Áudio Isolada do Jogo / Janela (Sem capturar o microfone nem o Discord)
+    // Captura de Áudio do Sistema (Estéreo HD)
     if (includeAudio) {
       const displayAudioTracks = stream.getAudioTracks();
       
       if (displayAudioTracks.length > 0) {
-        // Áudio nativo da janela / display capturado pelo Electron (Exclui automaticamente microfone)
         state.audioStream = stream;
         initAudioVisualizer(stream);
         startAudioStreamer(stream);
-        log('🔊 Áudio nativo da aplicação capturado com sucesso (Zero retorno de microfone/Discord)!', 'success');
-      } else if (audioDeviceId && audioDeviceId !== 'default') {
-        // Se o usuário selecionou explicitamente um dispositivo monitor de áudio específico
+        log('🔊 Áudio nativo da aplicação capturado com sucesso!', 'success');
+      } else {
+        // Captura de áudio de sistema / monitor loopback via Web Audio API
         try {
+          const audioConstraints = {
+            deviceId: audioDeviceId && audioDeviceId !== 'default' ? { exact: audioDeviceId } : undefined,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: 2
+          };
+
           const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              deviceId: { exact: audioDeviceId },
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: false,
-              channelCount: 2
-            },
+            audio: audioConstraints,
             video: false
           });
 
           state.audioStream = audioStream;
           initAudioVisualizer(audioStream);
           startAudioStreamer(audioStream);
-          log('🔊 Áudio de monitor do sistema conectado com sucesso!', 'success');
+          log('🔊 Áudio do sistema conectado e transmitindo ao vivo em Estéreo!', 'success');
         } catch (audioErr) {
-          log(`Aviso ao conectar áudio selecionado: ${audioErr.message}`, 'warn');
+          log(`Erro ao conectar áudio: ${audioErr.message}`, 'error');
         }
       }
     }
