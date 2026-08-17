@@ -75,8 +75,8 @@ const state = {
 
   // Volume Independente por Streamer (hostId -> { volume, isMuted, savedVolumeBeforeMute })
   streamVolumes: {},
-  currentVolume: 1.0,
-  savedVolumeBeforeMute: 1.0,
+  currentVolume: 0.4,
+  savedVolumeBeforeMute: 0.4,
   isMuted: false,
 
   // Qualidade de Visualização do Espectador (Independente para economizar CPU)
@@ -1010,13 +1010,13 @@ function restoreStreamVolume(hostId) {
   if (isMine) {
     state.streamVolumes[hostId] = {
       volume: 0,
-      savedVolumeBeforeMute: 1.0,
+      savedVolumeBeforeMute: 0.4,
       isMuted: true
     };
   } else if (!state.streamVolumes[hostId]) {
     state.streamVolumes[hostId] = {
-      volume: 1.0,
-      savedVolumeBeforeMute: 1.0,
+      volume: 0.4,
+      savedVolumeBeforeMute: 0.4,
       isMuted: false
     };
   }
