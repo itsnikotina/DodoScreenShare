@@ -16,7 +16,7 @@ function createWindow() {
     backgroundColor: '#0f1117',
     title: 'Dodo Screen Share - Desktop Host',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false // Não congela FPS quando em segundo plano
@@ -35,16 +35,16 @@ ipcMain.handle('get-desktop-sources', async () => {
   try {
     const sources = await desktopCapturer.getSources({
       types: ['window', 'screen'],
-      thumbnailSize: { width: 480, height: 270 },
-      fetchWindowIcons: true
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: false
     });
 
     return sources.map((s) => {
       return {
         id: s.id,
-        name: s.name,
+        name: s.name || 'Janela',
         thumbnail: s.thumbnail ? s.thumbnail.toDataURL() : null,
-        appIcon: s.appIcon ? s.appIcon.toDataURL() : null,
+        appIcon: null,
         isScreen: s.id.startsWith('screen:')
       };
     });
