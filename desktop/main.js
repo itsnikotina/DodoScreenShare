@@ -1,11 +1,51 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow = null;
+let audioModuleSinkId = null;
+let audioModuleLoopbackId = null;
+
+// Configuração 100% Automática de Isolamento de Áudio (Estilo Parsec/Discord no Linux)
+async function setupAutomaticAudioIsolation() {
+  if (process.platform !== 'linux') return;
+  try {
+    await execAsync('pactl unload-module $(pactl list short modules | grep "sink_name=Dodo_Audio" | awk \'{print $1}\') 2>/dev/null || true');
+    await execAsync('pactl unload-module $(pactl list short modules | grep "source=Dodo_Audio.monitor" | awk \'{print $1}\') 2>/dev/null || true');
+
+    const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio sink_properties=device.description="Dodo_Game_Audio"');
+    audioModuleSinkId = sinkOut.trim();
+
+    const { stdout: loopOut } = await execAsync('pactl load-module module-loopback source=Dodo_Audio.monitor sink=@DEFAULT_SINK@ latency_msec=1');
+    audioModuleLoopbackId = loopOut.trim();
+
+    console.log('[Audio Isolation] Canal virtual Dodo_Audio inicializado com sucesso!');
+  } catch (err) {
+    console.warn('[Audio Isolation] Inicialização do canal de áudio:', err.message);
+  }
+}
+
+async function cleanupAudioIsolation() {
+  if (process.platform !== 'linux') return;
+  try {
+    if (audioModuleLoopbackId) await execAsync(`pactl unload-module ${audioModuleLoopbackId} 2>/dev/null || true`);
+    if (audioModuleSinkId) await execAsync(`pactl unload-module ${audioModuleSinkId} 2>/dev/null || true`);
+  } catch (e) {}
+}
+
+ipcMain.handle('ensure-audio-isolation', async () => {
+  if (process.platform === 'linux') {
+    await setupAutomaticAudioIsolation();
+  }
+  return true;
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -107,4 +147,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', async () => {
+  await cleanupAudioIsolation();
 });

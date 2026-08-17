@@ -481,19 +481,37 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     state.localStream = stream;
     state.isHosting = true;
 
-    // Captura de Áudio do Sistema (Estéreo HD 48kHz)
+    // Captura de Áudio do Sistema (100% Automático com Isolamento do Discord)
     if (includeAudio) {
+      if (window.electronAPI && window.electronAPI.ensureAudioIsolation) {
+        await window.electronAPI.ensureAudioIsolation();
+      }
+
       const displayAudioTracks = stream.getAudioTracks();
       
       if (displayAudioTracks.length > 0) {
         state.audioStream = stream;
         initAudioVisualizer(stream);
         startAudioStreamer(stream);
-        log('🔊 Áudio nativo da aplicação capturado com sucesso!', 'success');
+        log('🔊 Áudio nativo da aplicação conectado com sucesso!', 'success');
       } else {
-        // Captura de áudio de sistema / monitor loopback via Web Audio API
         try {
+          // Busca automática pelo canal virtual isolado (Zero eco do Discord)
+          let targetDeviceId = undefined;
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const isolatedDev = devices.find(d => 
+              d.kind === 'audioinput' && 
+              (d.label.toLowerCase().includes('dodo') || d.label.toLowerCase().includes('null') || d.label.toLowerCase().includes('loopback'))
+            );
+            if (isolatedDev) {
+              targetDeviceId = isolatedDev.deviceId;
+              log(`🛡️ Isolamento automático ativo: usando canal "${isolatedDev.label}"`, 'info');
+            }
+          } catch (e) {}
+
           const audioConstraints = {
+            deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
@@ -508,7 +526,7 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
           state.audioStream = audioStream;
           initAudioVisualizer(audioStream);
           startAudioStreamer(audioStream);
-          log('🔊 Áudio do sistema conectado e transmitindo ao vivo em Estéreo!', 'success');
+          log('🔊 Áudio do sistema conectado e transmitindo em Estéreo HD!', 'success');
         } catch (audioErr) {
           log(`Erro ao conectar áudio: ${audioErr.message}`, 'error');
         }
