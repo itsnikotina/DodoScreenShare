@@ -643,8 +643,14 @@ function startAudioStreamer(audioStream) {
     if (!AudioCtxClass) return;
 
     state.hostAudioCtx = new AudioCtxClass({ latencyHint: 'interactive', sampleRate: 48000 });
+    if (state.hostAudioCtx.state === 'suspended') {
+      state.hostAudioCtx.resume().catch(() => {});
+    }
+
     const source = state.hostAudioCtx.createMediaStreamSource(audioStream);
     state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(1024, 2, 2);
+
+    let sentChunks = 0;
 
     state.scriptProcessor.onaudioprocess = (e) => {
       if (!state.isHosting) return;
@@ -677,6 +683,11 @@ function startAudioStreamer(audioStream) {
           channels: 2
         }
       });
+
+      sentChunks++;
+      if (sentChunks === 1 || sentChunks % 300 === 0) {
+        log(`🔊 Transmitindo fluxo de áudio estéreo em tempo real (${sentChunks} blocos enviados)...`, 'info');
+      }
     };
 
     // Mudo no destino local do Host para não dar eco em quem está transmitindo

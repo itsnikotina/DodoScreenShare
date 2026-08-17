@@ -992,18 +992,11 @@ function isStreamOwnedByMe(hostId) {
   if (hostId === state.peerId) return true;
 
   const s = state.availableStreams.find(item => item.hostId === hostId);
-  const myProfile = state.userProfile || (state.callParticipants && state.callParticipants.length > 0 ? state.callParticipants[0].profile : null);
+  const myProfile = state.userProfile;
 
-  if (s && s.profile) {
-    if (myProfile) {
-      if (s.profile.id && myProfile.id && String(s.profile.id) === String(myProfile.id)) return true;
-      if (s.profile.username && myProfile.username && s.profile.username.trim().toLowerCase() === myProfile.username.trim().toLowerCase()) return true;
-    }
-
-    // Se estiver na Activity e houver correspondência com participante da chamada
-    if (state.callParticipants && state.callParticipants.length > 0) {
-      const match = state.callParticipants.some(p => p.profile && p.profile.username && p.profile.username.trim().toLowerCase() === s.profile.username.trim().toLowerCase());
-      if (match) return true;
+  if (s && s.profile && myProfile) {
+    if (s.profile.id && myProfile.id && String(s.profile.id) === String(myProfile.id)) {
+      return true;
     }
   }
 
@@ -1606,6 +1599,8 @@ function renderIncomingFrame(frameData) {
   img.src = frameData;
 }
 
+let firstAudioReceived = false;
+
 function playIncomingAudioChunk(audioPayload) {
   if (!audioPayload || (!audioPayload.b64 && !audioPayload.data) || !isInsideDiscordActivity()) return;
   if (state.isMuted || state.currentVolume <= 0 || isStreamOwnedByMe(state.watchingHostId)) return;
@@ -1614,6 +1609,10 @@ function playIncomingAudioChunk(audioPayload) {
     ensureViewerAudioContext();
     const ctx = state.viewerAudioCtx;
     if (!ctx || !state.viewerGainNode) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
 
     const sampleRate = audioPayload.sampleRate || 48000;
     let floatArray;
@@ -1653,6 +1652,11 @@ function playIncomingAudioChunk(audioPayload) {
 
     source.start(state.audioNextPlayTime);
     state.audioNextPlayTime += audioBuffer.duration;
+
+    if (!firstAudioReceived) {
+      firstAudioReceived = true;
+      log(`🔊 Reproduzindo fluxo de áudio estéreo HD (${channels === 2 ? 'Estéreo' : 'Mono'}, ${sampleRate}Hz)...`, 'success');
+    }
   } catch (err) {}
 }
 
