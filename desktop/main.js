@@ -291,9 +291,6 @@ async function cleanupAudioIsolation() {
 }
 
 ipcMain.handle('ensure-audio-isolation', async () => {
-  if (process.platform === 'linux') {
-    await setupAutomaticAudioIsolation();
-  }
   return true;
 });
 
@@ -387,7 +384,11 @@ app.whenReady().then(() => {
   });
 
   createWindow();
-  setupAutomaticAudioIsolation();
+
+  // Limpa quaisquer módulos virtuais residuais para não duplicar o som do usuário
+  if (process.platform === 'linux') {
+    cleanupAudioIsolation().catch(() => {});
+  }
 
   // Auto-Updater: Verifica atualizações automaticamente ao abrir e a cada 2 minutos
   setTimeout(() => { checkForUpdates(true); }, 3000);
