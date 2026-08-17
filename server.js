@@ -492,6 +492,7 @@ wss.on('connection', (ws, req) => {
       case 'join-room': {
         let targetRoomId = roomId || 'call-geral';
         ws.roomId = targetRoomId;
+        ws.platform = platform || 'web';
 
         const room = getOrCreateRoom(targetRoomId);
         room.participants.set(peerId, {
@@ -767,11 +768,22 @@ wss.on('connection', (ws, req) => {
         }
         r.participants.delete(peerId);
       }
+    });
 
-      // Se não sobrou nenhum participante na chamada do Discord nesta sala, avisa os hosts para encerrarem
-      const discordParticipants = Array.from(r.participants.values()).filter(p => p.platform === 'discord');
-      if (discordParticipants.length === 0 && r.hosts.size > 0) {
-        console.log(`[Sala ${rId}] 🚪 Todos os membros do Discord saíram da chamada. Avisando host para parar.`);
+    // Calcula total de usuários no Discord ativos em todas as salas
+    let totalDiscordParticipants = 0;
+    rooms.forEach((r) => {
+      r.participants.forEach((p) => {
+        if (p.platform === 'discord' && p.ws.readyState === WebSocket.OPEN) {
+          totalDiscordParticipants++;
+        }
+      });
+    });
+
+    // Se NÃO SOBROU NENHUM usuário no Discord ativo no servidor, encerra todas as transmissões
+    if (totalDiscordParticipants === 0) {
+      console.log('🚪 Nenhum usuário no Discord ativo no servidor. Encerrando transmissões ativas.');
+      rooms.forEach((r) => {
         r.hosts.forEach((h) => {
           if (h.ws && h.ws.readyState === WebSocket.OPEN) {
             h.ws.send(JSON.stringify({
@@ -780,8 +792,9 @@ wss.on('connection', (ws, req) => {
             }));
           }
         });
-      }
-    });
+        r.hosts.clear();
+      });
+    }
 
     broadcastStreamsList();
     if (ws.roomId) cleanEmptyRoom(ws.roomId);
