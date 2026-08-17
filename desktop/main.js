@@ -398,7 +398,8 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+  await cleanupAudioIsolation();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -406,4 +407,16 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   await cleanupAudioIsolation();
+});
+
+app.on('will-quit', async () => {
+  await cleanupAudioIsolation();
+});
+
+// Captura encerramento via Ctrl + C ou fechamento do terminal
+['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((sig) => {
+  process.on(sig, async () => {
+    await cleanupAudioIsolation();
+    process.exit(0);
+  });
 });
