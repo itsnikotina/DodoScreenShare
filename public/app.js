@@ -1554,11 +1554,16 @@ function renderIncomingFrame(frameData) {
 
   // 1. Limitação de 30 FPS no espectador para economizar CPU em PCs fracos
   const now = performance.now();
-  if (now - lastViewerFrameRenderTime < 32) return;
+  if (now - lastViewerFrameRenderTime < 30) return;
   lastViewerFrameRenderTime = now;
 
-  const canvas = dom.liveCanvas;
+  const canvas = dom.canvasPreview || document.getElementById('canvasPreview');
   if (!canvas) return;
+
+  // Mostra o canvas e esconde os placeholders
+  if (dom.preview) dom.preview.classList.add('hidden');
+  if (dom.videoPlaceholder) dom.videoPlaceholder.classList.add('hidden');
+  canvas.classList.remove('hidden');
 
   const img = new Image();
   img.onload = () => {
@@ -1566,11 +1571,11 @@ function renderIncomingFrame(frameData) {
     let targetH = img.height;
 
     // Resolução dinâmica ajustável por espectador
-    if (state.viewerResolution === '480p') {
+    if (state.viewerQuality === '480p') {
       targetW = 854; targetH = 480;
-    } else if (state.viewerResolution === '720p') {
+    } else if (state.viewerQuality === '720p') {
       targetW = 1280; targetH = 720;
-    } else if (state.viewerResolution === '1080p') {
+    } else if (state.viewerQuality === '1080p') {
       targetW = 1920; targetH = 1080;
     }
 
