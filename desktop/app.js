@@ -454,17 +454,37 @@ async function populateAudioDevices() {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === 'audioinput');
 
-    const options = ['<option value="default">🔊 Áudio do Sistema / Padrão</option>'];
+    let selectedId = 'default';
+    const isolatedOptions = [];
+    const regularOptions = [];
 
     audioInputs.forEach((dev, idx) => {
       if (dev.deviceId && dev.deviceId !== 'default') {
-        const label = dev.label || `Canal de Áudio ${idx + 1}`;
-        options.push(`<option value="${dev.deviceId}">🔊 ${escapeHtml(label)}</option>`);
+        const label = dev.label || `Canal ${idx + 1}`;
+        const isDodoIsolated = label.toLowerCase().includes('dodo') || label.toLowerCase().includes('null');
+        if (isDodoIsolated) {
+          selectedId = dev.deviceId;
+          isolatedOptions.push(`<option value="${dev.deviceId}">🛡️ [ISOLAMENTO DISCORD ATIVO] ${escapeHtml(label)}</option>`);
+        } else {
+          regularOptions.push(`<option value="${dev.deviceId}">🔊 ${escapeHtml(label)}</option>`);
+        }
       }
     });
 
-    if (dom.selectAudioDevice) dom.selectAudioDevice.innerHTML = options.join('');
-    if (dom.modalSelectAudioDevice) dom.modalSelectAudioDevice.innerHTML = options.join('');
+    const options = [
+      ...isolatedOptions,
+      '<option value="default">🔊 Áudio do Sistema / Padrão</option>',
+      ...regularOptions
+    ];
+
+    if (dom.selectAudioDevice) {
+      dom.selectAudioDevice.innerHTML = options.join('');
+      dom.selectAudioDevice.value = selectedId;
+    }
+    if (dom.modalSelectAudioDevice) {
+      dom.modalSelectAudioDevice.innerHTML = options.join('');
+      dom.modalSelectAudioDevice.value = selectedId;
+    }
   } catch (e) {}
 }
 
