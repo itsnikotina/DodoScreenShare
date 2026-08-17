@@ -506,21 +506,19 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
           sendSignal({ type: 'stream-audio', audio: payload });
 
           sentChunks++;
-          if (sentChunks === 1 || sentChunks % 300 === 0) {
-            // Diagnóstico rápido dos primeiros bytes
-            try {
-              const bytes = Uint8Array.from(atob(payload.b64), c => c.charCodeAt(0));
-              const s16 = new Int16Array(bytes.buffer);
-              let sumL = 0, sumR = 0;
-              for (let i = 0; i < s16.length; i += 2) {
-                sumL += (s16[i] / 32768) ** 2;
-                sumR += (s16[i + 1] / 32768) ** 2;
-              }
-              const rmsL = Math.sqrt(sumL / (s16.length / 2));
-              const rmsR = Math.sqrt(sumR / (s16.length / 2));
-              log(`🔊 Estéreo Nativo [E: ${(rmsL * 100).toFixed(0)}% | D: ${(rmsR * 100).toFixed(0)}%] (bloco ${sentChunks})`, 'info');
-            } catch (e) {}
-          }
+          // Diagnóstico contínuo: mostra L/R a cada chunk
+          try {
+            const bytes = Uint8Array.from(atob(payload.b64), c => c.charCodeAt(0));
+            const s16 = new Int16Array(bytes.buffer);
+            let sumL = 0, sumR = 0;
+            for (let i = 0; i < s16.length; i += 2) {
+              sumL += (s16[i] / 32768) ** 2;
+              sumR += (s16[i + 1] / 32768) ** 2;
+            }
+            const rmsL = Math.sqrt(sumL / (s16.length / 2));
+            const rmsR = Math.sqrt(sumR / (s16.length / 2));
+            log(`🔊 [E: ${(rmsL * 100).toFixed(1)}% | D: ${(rmsR * 100).toFixed(1)}%] bloco #${sentChunks}`, 'info');
+          } catch (e) {}
         });
         log('🔊 Áudio nativo da aplicação conectado com sucesso! (Estéreo 48kHz via parec)', 'success');
       } else {
