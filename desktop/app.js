@@ -455,24 +455,21 @@ async function populateAudioDevices() {
     const audioInputs = devices.filter(d => d.kind === 'audioinput');
 
     const monitorOptions = [];
-    const micOptions = [];
 
     audioInputs.forEach((dev, idx) => {
       if (dev.deviceId) {
-        const label = dev.label || `Dispositivo ${idx + 1}`;
-        const isMonitor = label.toLowerCase().includes('monitor') || label.toLowerCase().includes('loopback') || label.toLowerCase().includes('dodo');
-        if (isMonitor) {
-          monitorOptions.push(`<option value="${dev.deviceId}">🔊 [Jogo/Sistema] ${escapeHtml(label)}</option>`);
-        } else {
-          micOptions.push(`<option value="${dev.deviceId}">🎙️ [Microfone] ${escapeHtml(label)}</option>`);
+        const label = dev.label || '';
+        const isMic = label.toLowerCase().includes('micro') || label.toLowerCase().includes('mic') || label.toLowerCase().includes('fifine');
+        // Ignora e remove completamente qualquer microfone físico
+        if (!isMic) {
+          monitorOptions.push(`<option value="${dev.deviceId}">🔊 ${escapeHtml(label || `Saída de Som ${idx + 1}`)}</option>`);
         }
       }
     });
 
     const options = [
-      '<option value="default">🔊 Áudio Nativo da Janela / Sistema (Sem Vozes)</option>',
-      ...monitorOptions,
-      ...micOptions
+      '<option value="default">🔊 Áudio do Jogo / Sistema (Padrão)</option>',
+      ...monitorOptions
     ];
 
     if (dom.selectAudioDevice) dom.selectAudioDevice.innerHTML = options.join('');
