@@ -153,6 +153,7 @@ const dom = {
   audioDbText: document.getElementById('audioDbText'),
 
   // Painel de Espectadores
+  btnLeaveStream: document.getElementById('btnLeaveStream'),
   myViewersCount: document.getElementById('myViewersCount'),
   myViewersList: document.getElementById('myViewersList'),
   badgeDiscordCount: document.getElementById('badgeDiscordCount'),
@@ -907,8 +908,8 @@ function updateAvailableStreams(streams, participants = []) {
     });
   }
 
-  // Auto-seleciona na entrada ou reinício de transmissões
-  if (!state.isHosting && streams.length > 0 && isInsideDiscordActivity()) {
+  // Auto-seleciona na entrada se o usuário não optou por sair
+  if (!state.isHosting && streams.length > 0 && isInsideDiscordActivity() && !state.userStoppedWatching) {
     if (!state.watchingHostId || !streams.some(s => s.hostId === state.watchingHostId)) {
       selectStream(streams[0].hostId, true);
     }
@@ -923,8 +924,9 @@ function selectStream(hostId, force = false) {
   log(`Conectando à transmissão: ${hostId}...`, 'info');
   state.watchingHostId = hostId;
 
-  // Esconde placeholder imediatamente e entra no modo foco
+  // Esconde placeholder, mostra botão de sair e entra no modo foco
   if (dom.videoPlaceholder) dom.videoPlaceholder.classList.add('hidden');
+  if (dom.btnLeaveStream) dom.btnLeaveStream.classList.remove('hidden');
   setFocusMode(true);
 
   // Envia sempre a solicitação de inscrição
@@ -1973,6 +1975,12 @@ if (dom.btnFullscreen) dom.btnFullscreen.addEventListener('click', toggleFullscr
 if (dom.btnFloatingFullscreen) dom.btnFloatingFullscreen.addEventListener('click', toggleFullscreen);
 if (dom.btnToggleFocus) dom.btnToggleFocus.addEventListener('click', toggleFocusMode);
 if (dom.videoWrapper) dom.videoWrapper.addEventListener('dblclick', toggleFocusMode);
+if (dom.btnLeaveStream) {
+  dom.btnLeaveStream.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopWatchingStream();
+  });
+}
 
 // ==========================================
 // Parar de Assistir e Menu de Contexto (Botão Direito)
@@ -1992,6 +2000,9 @@ function stopWatchingStream() {
   state.watchingProfile = null;
   updateActiveStreamHeader(null);
 
+  if (dom.btnLeaveStream) dom.btnLeaveStream.classList.add('hidden');
+  if (dom.canvasPreview) dom.canvasPreview.classList.add('hidden');
+  if (dom.preview) dom.preview.classList.add('hidden');
   dom.videoPlaceholder.classList.remove('hidden');
   dom.placeholderText.textContent = 'Chamada de Voz Ativa';
   dom.placeholderTip.textContent = 'Clique em qualquer transmissão AO VIVO abaixo para assistir a tela!';
