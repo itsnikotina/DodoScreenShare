@@ -591,7 +591,7 @@ function startAntiLagStreamer(stream, targetFps = 30) {
   }, intervalMs);
 }
 
-// Audio Streamer via ScriptProcessor (Stereo Hi-Fi 48kHz, 2 canais L + R)
+// Audio Streamer via ScriptProcessor (Stereo Hi-Fi 48kHz, 2 canais L + R com Volume Booster)
 function startAudioStreamer(audioStream) {
   try {
     const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
@@ -603,6 +603,18 @@ function startAudioStreamer(audioStream) {
     }
 
     const source = state.hostAudioCtx.createMediaStreamSource(audioStream);
+
+    // Booster de Volume (2.5x) e Compressor Dinâmico para som alto e limpo
+    const gainNode = state.hostAudioCtx.createGain();
+    gainNode.gain.value = 2.2;
+
+    const compressor = state.hostAudioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-24, state.hostAudioCtx.currentTime);
+    compressor.knee.setValueAtTime(30, state.hostAudioCtx.currentTime);
+    compressor.ratio.setValueAtTime(12, state.hostAudioCtx.currentTime);
+    compressor.attack.setValueAtTime(0.003, state.hostAudioCtx.currentTime);
+    compressor.release.setValueAtTime(0.25, state.hostAudioCtx.currentTime);
+
     state.scriptProcessor = state.hostAudioCtx.createScriptProcessor(1024, 2, 2);
 
     let sentChunks = 0;
@@ -616,8 +628,9 @@ function startAudioStreamer(audioStream) {
       const interleaved = new Int16Array(totalSamples);
 
       for (let i = 0; i < left.length; i++) {
-        const sL = Math.max(-1, Math.min(1, left[i]));
-        const sR = Math.max(-1, Math.min(1, right[i]));
+        // Multiplica e limita para evitar distorção clipping
+        const sL = Math.max(-1, Math.min(1, left[i] * 1.8));
+        const sR = Math.max(-1, Math.min(1, right[i] * 1.8));
         interleaved[i * 2] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
         interleaved[i * 2 + 1] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
       }
@@ -641,15 +654,17 @@ function startAudioStreamer(audioStream) {
 
       sentChunks++;
       if (sentChunks === 1 || sentChunks % 300 === 0) {
-        log(`🔊 Transmitindo fluxo de áudio estéreo em tempo real (${sentChunks} blocos enviados)...`, 'info');
+        log(`🔊 Transmitindo áudio estéreo HD amplificado (${sentChunks} blocos enviados)...`, 'info');
       }
     };
 
-    // Mudo no destino local do Host para não dar eco em quem está transmitindo
+    // Cadeia de áudio: Source -> Gain (2.2x) -> Compressor -> ScriptProcessor -> Silence (Host)
+    source.connect(gainNode);
+    gainNode.connect(compressor);
+    compressor.connect(state.scriptProcessor);
+
     const silenceGain = state.hostAudioCtx.createGain();
     silenceGain.gain.value = 0;
-
-    source.connect(state.scriptProcessor);
     state.scriptProcessor.connect(silenceGain);
     silenceGain.connect(state.hostAudioCtx.destination);
   } catch (err) {
