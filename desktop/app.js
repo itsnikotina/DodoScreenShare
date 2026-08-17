@@ -962,6 +962,16 @@ dom.btnClearLogs.addEventListener('click', () => {
   dom.logCountBadge.textContent = '0';
 });
 
+if (dom.btnToggleLogs && dom.cardLogs) {
+  dom.btnToggleLogs.addEventListener('click', () => {
+    dom.cardLogs.classList.toggle('collapsed');
+    const isCollapsed = dom.cardLogs.classList.contains('collapsed');
+    if (dom.iconToggleLogs) {
+      dom.iconToggleLogs.setAttribute('icon', isCollapsed ? 'lucide:chevron-down' : 'lucide:chevron-up');
+    }
+  });
+}
+
 // Auto-Updater In-App
 if (dom.btnCheckUpdates) {
   dom.btnCheckUpdates.addEventListener('click', async () => {
