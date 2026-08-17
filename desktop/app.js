@@ -489,14 +489,20 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
         try { await window.electronAPI.ensureAudioIsolation(); } catch (e) {}
       }
 
+      log(`🔍 Electron API disponível: ${Object.keys(window.electronAPI || {}).join(', ')}`, 'info');
+
       // Tenta primeiro o pipeline nativo via parec / pw-record (estéreo 48kHz verdadeiro no Linux)
       let nativeStereoResult = null;
       if (window.electronAPI && window.electronAPI.startNativeStereoAudio) {
         try {
           nativeStereoResult = await window.electronAPI.startNativeStereoAudio();
+          log(`🎧 Retorno do áudio nativo: ${JSON.stringify(nativeStereoResult)}`, 'info');
         } catch (e) {
           nativeStereoResult = { success: false, error: e.message };
+          log(`❌ Exceção ao chamar startNativeStereoAudio: ${e.message}`, 'error');
         }
+      } else {
+        log('⚠️ window.electronAPI.startNativeStereoAudio NÃO encontrado no renderer!', 'warn');
       }
 
       const isNativeOk = nativeStereoResult === true || (nativeStereoResult && nativeStereoResult.success);
