@@ -1,0 +1,14 @@
+{
+  "name": "dodo-screenshare",
+  "version": "2.3.2",
+  "tasks": {
+    "start": "deno run --allow-net --allow-read --allow-env main.ts",
+    "dev": "deno run --watch --allow-net --allow-read --allow-env main.ts"
+  },
+  "imports": {
+    "jsr:@std/http/": "jsr:@std/http@^1.0.0"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window", "dom"]
+  }
+}
