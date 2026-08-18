@@ -86,7 +86,10 @@ function getPublicServerUrl(req) {
   if (host && !host.includes('discordsays.com') && !host.includes('discord.com')) {
     return `${proto}://${host}/`;
   }
-  return 'https://dodo.discloud.app/';
+  if (activeTunnelUrl) {
+    return activeTunnelUrl.endsWith('/') ? activeTunnelUrl : `${activeTunnelUrl}/`;
+  }
+  return `${proto}://${host || 'localhost:8080'}/`;
 }
 
 // Rota de Configuração Dinâmica para Clientes Web / Discord Activity
