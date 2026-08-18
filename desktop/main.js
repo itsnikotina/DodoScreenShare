@@ -137,27 +137,21 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       nativeAudioProcess = null;
     }
 
-    // Descobre a saída padrão ativa (fones do usuário) para gravar o som do PC sem capturar o microfone
-    let monitorDevice = null;
-    try {
-      const { stdout: sinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
-      const defSink = sinkOut.trim();
-      if (defSink && !defSink.includes('Dodo_Audio') && !defSink.includes('null')) {
-        monitorDevice = `${defSink}.monitor`;
-      }
-    } catch (e) {}
+    // Configura o canal virtual Dodo_Audio de alta fidelidade 48kHz estéreo
+    await setupAutomaticAudioIsolation();
+
+    // Monitor do canal Dodo_Audio (Captura 100% o som do PC e 0% o microfone)
+    let monitorDevice = 'Dodo_Audio.monitor';
 
     const args = [
       '--format=s16le',
       '--rate=48000',
       '--channels=2',
-      '--latency-msec=20'
+      '--latency-msec=20',
+      '-d', monitorDevice
     ];
-    if (monitorDevice) {
-      args.push('-d', monitorDevice);
-    }
 
-    console.log(`[Native Audio] Gravando som do sistema de: ${monitorDevice || 'Monitor Padrão'} (Sem Microfone)`);
+    console.log(`[Native Audio] Gravando som do sistema de: ${monitorDevice} (Dodo_Audio Estéreo HD 48kHz)`);
 
     let p = null;
     let toolName = 'parec';
@@ -166,10 +160,7 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     } catch (err) {
       try {
         toolName = 'pw-record';
-        const pwArgs = ['--channels=2', '--rate=48000', '--format=s16'];
-        if (monitorDevice) pwArgs.push('-d', monitorDevice);
-        pwArgs.push('-');
-        p = spawn('pw-record', pwArgs, { env: process.env });
+        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-d', monitorDevice, '-'], { env: process.env });
       } catch (err2) {
         return { success: false, error: 'Nem parec nem pw-record encontrados' };
       }
@@ -211,13 +202,76 @@ ipcMain.handle('stop-native-stereo-audio', async () => {
   return true;
 });
 
-async function cleanupAudioIsolation() {
+async function setupAutomaticAudioIsolation() {
+  if (process.platform !== 'linux') return;
+  try {
+    // 1. Identifica o sink físico real do usuário antes de criar o Dodo_Audio
+    if (!originalDefaultSink) {
+      try {
+        const { stdout: defOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
+        const def = defOut.trim();
+        if (def && !def.includes('Dodo_Audio') && !def.includes('null')) {
+          originalDefaultSink = def;
+        }
+      } catch (e) {}
+    }
+
+    const realSink = originalDefaultSink || '@DEFAULT_SINK@';
+
+    // 2. Limpa instâncias anteriores do Dodo_Audio
+    await cleanupAudioIsolation(false);
+
+    // 3. Cria o canal nulo virtual Dodo_Audio
+    await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio sink_properties=device.description="Dodo_Audio" 2>/dev/null || true');
+
+    // 4. Cria loopback de Dodo_Audio.monitor -> fones reais do usuário para ele continuar ouvindo
+    await execAsync(`pactl load-module module-loopback source=Dodo_Audio.monitor sink="${realSink}" latency_msec=20 2>/dev/null || true`);
+
+    // 5. Define Dodo_Audio como saída padrão do sistema
+    await execAsync('pactl set-default-sink Dodo_Audio 2>/dev/null || true');
+
+    // 6. Move streams de áudio existentes para o Dodo_Audio
+    await redirectExistingStreamsToDodo();
+
+    // 7. Mantém os streams redirecionados periodicamente
+    if (isolationInterval) clearInterval(isolationInterval);
+    isolationInterval = setInterval(() => {
+      redirectExistingStreamsToDodo().catch(() => {});
+    }, 2000);
+
+    console.log(`[Native Audio] Canal virtual Dodo_Audio criado com sucesso (ouvindo nos fones: ${realSink})!`);
+  } catch (err) {
+    console.warn('[Native Audio Isolation Falha]:', err.message);
+  }
+}
+
+async function redirectExistingStreamsToDodo() {
+  try {
+    const { stdout: inputs } = await execAsync('pactl list short sink-inputs 2>/dev/null || true');
+    if (!inputs) return;
+    const lines = inputs.trim().split('\n');
+    for (const line of lines) {
+      const parts = line.split('\t');
+      const inputId = parts[0];
+      if (inputId && !isNaN(inputId)) {
+        await execAsync(`pactl move-sink-input ${inputId} Dodo_Audio 2>/dev/null || true`);
+      }
+    }
+  } catch (e) {}
+}
+
+async function cleanupAudioIsolation(restoreDefault = true) {
   if (process.platform !== 'linux') return;
   try {
     if (isolationInterval) {
       clearInterval(isolationInterval);
       isolationInterval = null;
     }
+
+    if (restoreDefault && originalDefaultSink) {
+      await execAsync(`pactl set-default-sink "${originalDefaultSink}" 2>/dev/null || true`);
+    }
+
     await execAsync(`
       for mod in $(pactl list short modules 2>/dev/null | grep -E "Dodo_Audio|module-loopback.*Dodo" | awk '{print $1}'); do
         pactl unload-module $mod 2>/dev/null || true
@@ -227,6 +281,7 @@ async function cleanupAudioIsolation() {
 }
 
 ipcMain.handle('ensure-audio-isolation', async () => {
+  await setupAutomaticAudioIsolation();
   return true;
 });
 
