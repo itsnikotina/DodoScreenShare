@@ -809,10 +809,10 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-function startCloudflareTunnel(port) {
+async function startCloudflareTunnel(port) {
   try {
-    console.log('[Cloudflare Tunnel] Iniciando túnel Cloudflare automático 24/7...');
-    const tunnelProc = spawn('npx', ['cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
+    console.log('[Tunnel] Iniciando túnel seguro automático 24/7...');
+    const tunnelProc = spawn('npx', ['--yes', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -838,15 +838,27 @@ function startCloudflareTunnel(port) {
     tunnelProc.stdout.on('data', parseOutput);
     tunnelProc.stderr.on('data', parseOutput);
 
-    tunnelProc.on('error', (err) => {
-      console.warn('[Cloudflare Tunnel] Erro ao rodar cloudflared:', err.message);
+    tunnelProc.on('error', async () => {
+      try {
+        const localtunnelModule = await import('localtunnel');
+        const lt = localtunnelModule.default || localtunnelModule;
+        const tunnel = await lt({ port });
+        console.log(`
+=====================================================
+🌐 TÚNEL SEGURO ATIVO (24/7 NA DISCLOUD)!
+👉 Link Completo: ${tunnel.url}
+👉 No Discord Dev Portal (Alvo): ${tunnel.url.replace('https://', '')}
+👉 No Host Desktop: ${tunnel.url}
+=====================================================
+        `);
+      } catch (e) {}
     });
 
     process.on('exit', () => {
       try { tunnelProc.kill(); } catch (e) {}
     });
   } catch (err) {
-    console.warn('[Cloudflare Tunnel] Falha ao iniciar túnel:', err.message);
+    console.warn('[Tunnel] Falha ao iniciar túnel:', err.message);
   }
 }
 
