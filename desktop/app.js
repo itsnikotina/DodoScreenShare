@@ -508,9 +508,10 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
       const isNativeOk = nativeStereoResult === true || (nativeStereoResult && nativeStereoResult.success);
 
       if (isNativeOk) {
-        // Pipeline nativo: recebe chunks PCM raw de parec/pw-record e envia ao servidor em tempo real
+        if (window.electronAPI.removeNativeAudioListeners) {
+          window.electronAPI.removeNativeAudioListeners();
+        }
         let sentChunks = 0;
-        let lastLogTime = 0;
         window.electronAPI.onNativeAudioChunk((payload) => {
           if (!state.isHosting) return;
           sendSignal({ type: 'stream-audio', audio: payload });
@@ -857,8 +858,13 @@ function stopSharing() {
   }
 
   // Para o processo parec nativo de áudio estéreo
-  if (window.electronAPI && window.electronAPI.stopNativeStereoAudio) {
-    window.electronAPI.stopNativeStereoAudio().catch(() => {});
+  if (window.electronAPI) {
+    if (window.electronAPI.stopNativeStereoAudio) {
+      window.electronAPI.stopNativeStereoAudio().catch(() => {});
+    }
+    if (window.electronAPI.removeNativeAudioListeners) {
+      window.electronAPI.removeNativeAudioListeners();
+    }
   }
 
   sendSignal({ type: 'stop-stream' });

@@ -133,9 +133,11 @@ ipcMain.handle('start-native-stereo-audio', async () => {
 
   try {
     if (nativeAudioProcess) {
-      try { nativeAudioProcess.kill(); } catch (e) {}
+      try { nativeAudioProcess.kill('SIGKILL'); } catch (e) {}
       nativeAudioProcess = null;
     }
+    // Garante que nenhum processo parec anterior ficou órfão em segundo plano
+    await execAsync('pkill -9 -f parec 2>/dev/null || true; pkill -9 -f pw-record 2>/dev/null || true').catch(() => {});
 
     // Descobre o sink padrão atual do sistema
     let monitorDevice = null;
@@ -157,7 +159,7 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       args.push('-d', monitorDevice);
     }
 
-    console.log(`[Native Audio] Iniciando parec com dispositivo: ${monitorDevice || 'Padrão'}`);
+    console.log(`[Native Audio] Iniciando parec único com dispositivo: ${monitorDevice || 'Padrão'}`);
 
     let p = null;
     let toolName = 'parec';
@@ -199,11 +201,12 @@ ipcMain.handle('start-native-stereo-audio', async () => {
   }
 });
 
-ipcMain.handle('stop-native-stereo-audio', () => {
+ipcMain.handle('stop-native-stereo-audio', async () => {
   if (nativeAudioProcess) {
-    try { nativeAudioProcess.kill(); } catch (e) {}
+    try { nativeAudioProcess.kill('SIGKILL'); } catch (e) {}
     nativeAudioProcess = null;
   }
+  await execAsync('pkill -9 -f parec 2>/dev/null || true; pkill -9 -f pw-record 2>/dev/null || true').catch(() => {});
   return true;
 });
 
