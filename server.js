@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import fs from 'fs';
+import https from 'https';
 import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -821,18 +822,59 @@ app.get('/api/tunnel', (req, res) => {
 });
 
 async function startAutoTunnel(port) {
-  console.log('[Tunnel] Iniciando serviços de túnel 24/7 na Discloud...');
+  console.log('[Tunnel] Iniciando túnel Cloudflare nativo 24/7 na Discloud...');
 
-  // 1. Tenta Cloudflare Tunnel via npx
+  const binPath = path.join(__dirname, 'cloudflared-bin');
+
+  // Garante que o binário oficial do cloudflared existe
+  if (!fs.existsSync(binPath)) {
+    console.log('[Tunnel] Baixando binário oficial do cloudflared Linux...');
+    try {
+      await new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(binPath);
+        https.get('https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64', (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            https.get(res.headers.location, (redirRes) => {
+              redirRes.pipe(file);
+              file.on('finish', () => { file.close(); resolve(); });
+            }).on('error', reject);
+          } else {
+            res.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+          }
+        }).on('error', reject);
+      });
+      fs.chmodSync(binPath, 0o755);
+      console.log('[Tunnel] Binário cloudflared baixado e preparado com sucesso!');
+    } catch (dlErr) {
+      console.warn('[Tunnel] Falha ao baixar cloudflared via https, tentando curl...', dlErr.message);
+      try {
+        await new Promise((resolve, reject) => {
+          const dl = spawn('curl', ['-L', '-o', binPath, 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64']);
+          dl.on('close', (code) => {
+            if (code === 0) {
+              fs.chmodSync(binPath, 0o755);
+              resolve();
+            } else reject(new Error('curl falhou com code ' + code));
+          });
+          dl.on('error', reject);
+        });
+      } catch (curlErr) {
+        console.warn('[Tunnel] Falha ao baixar via curl:', curlErr.message);
+      }
+    }
+  }
+
   try {
-    const tunnelProc = spawn('npx', ['--yes', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
+    const executable = fs.existsSync(binPath) ? binPath : 'cloudflared';
+    const tunnelProc = spawn(executable, ['tunnel', '--url', `http://localhost:${port}`], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
     const handleOutput = (data) => {
       const str = data.toString();
       const match = str.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-      if (match && !activeTunnelUrl) {
+      if (match) {
         activeTunnelUrl = match[0];
         const rawDomain = activeTunnelUrl.replace('https://', '');
         console.log(`
@@ -849,28 +891,15 @@ async function startAutoTunnel(port) {
     tunnelProc.stdout.on('data', handleOutput);
     tunnelProc.stderr.on('data', handleOutput);
 
-    tunnelProc.on('error', () => {});
-  } catch (e) {}
+    tunnelProc.on('error', (err) => {
+      console.warn('[Tunnel] Erro ao executar binário:', err.message);
+    });
 
-  // 2. Tenta simultaneamente o localtunnel com subdomínio fixo como garantia
-  try {
-    const localtunnelModule = await import('localtunnel');
-    const lt = localtunnelModule.default || localtunnelModule;
-    const tunnel = await lt({ port, subdomain: 'dodo-screenshare' }).catch(() => lt({ port }));
-    if (tunnel && tunnel.url) {
-      if (!activeTunnelUrl) activeTunnelUrl = tunnel.url;
-      const rawDomain = tunnel.url.replace(/^https?:\/\//, '');
-      console.log(`
-=====================================================
-🌐 TÚNEL LOCALTUNNEL ATIVO (24/7 NA DISCLOUD)!
-👉 Link Completo: ${tunnel.url}
-👉 No Discord Dev Portal (Alvo): ${rawDomain}
-👉 Consulte a qualquer hora em: /api/tunnel
-=====================================================
-      `);
-    }
+    process.on('exit', () => {
+      try { tunnelProc.kill(); } catch (e) {}
+    });
   } catch (err) {
-    console.warn('[Tunnel localtunnel]:', err.message);
+    console.warn('[Tunnel] Exceção ao iniciar processo do túnel:', err.message);
   }
 }
 
