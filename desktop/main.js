@@ -364,7 +364,7 @@ app.whenReady().then(() => {
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
       const target = sources.find(s => s.id === selectedSourceId) || sources[0];
       if (target) {
-        callback({ video: target, audio: 'loopback' });
+        callback({ video: target });
       } else {
         callback({});
       }
