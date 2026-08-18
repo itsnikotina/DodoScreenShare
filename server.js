@@ -46,7 +46,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.discordsays.com https://discord.com https://*.discord.com *;");
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.discordsays.com https://discord.com https://*.discord.com https://*.discord.gg https://discord.gg;");
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
