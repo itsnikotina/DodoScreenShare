@@ -822,84 +822,37 @@ app.get('/api/tunnel', (req, res) => {
 });
 
 async function startAutoTunnel(port) {
-  console.log('[Tunnel] Iniciando túnel Cloudflare nativo 24/7 na Discloud...');
-
-  const binPath = path.join(__dirname, 'cloudflared-bin');
-
-  // Garante que o binário oficial do cloudflared existe
-  if (!fs.existsSync(binPath)) {
-    console.log('[Tunnel] Baixando binário oficial do cloudflared Linux...');
-    try {
-      await new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(binPath);
-        https.get('https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64', (res) => {
-          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            https.get(res.headers.location, (redirRes) => {
-              redirRes.pipe(file);
-              file.on('finish', () => { file.close(); resolve(); });
-            }).on('error', reject);
-          } else {
-            res.pipe(file);
-            file.on('finish', () => { file.close(); resolve(); });
-          }
-        }).on('error', reject);
-      });
-      fs.chmodSync(binPath, 0o755);
-      console.log('[Tunnel] Binário cloudflared baixado e preparado com sucesso!');
-    } catch (dlErr) {
-      console.warn('[Tunnel] Falha ao baixar cloudflared via https, tentando curl...', dlErr.message);
-      try {
-        await new Promise((resolve, reject) => {
-          const dl = spawn('curl', ['-L', '-o', binPath, 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64']);
-          dl.on('close', (code) => {
-            if (code === 0) {
-              fs.chmodSync(binPath, 0o755);
-              resolve();
-            } else reject(new Error('curl falhou com code ' + code));
-          });
-          dl.on('error', reject);
-        });
-      } catch (curlErr) {
-        console.warn('[Tunnel] Falha ao baixar via curl:', curlErr.message);
-      }
-    }
-  }
-
   try {
-    const executable = fs.existsSync(binPath) ? binPath : 'cloudflared';
-    const tunnelProc = spawn(executable, ['tunnel', '--url', `http://localhost:${port}`], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    const handleOutput = (data) => {
-      const str = data.toString();
-      const match = str.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-      if (match) {
-        activeTunnelUrl = match[0];
-        const rawDomain = activeTunnelUrl.replace('https://', '');
-        console.log(`
+    console.log('[Tunnel] Iniciando túnel seguro em Node.js (100% JS nativo)...');
+    const localtunnelModule = await import('localtunnel');
+    const lt = localtunnelModule.default || localtunnelModule;
+    const tunnel = await lt({ port });
+    
+    activeTunnelUrl = tunnel.url;
+    const rawDomain = tunnel.url.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    
+    console.log(`
 =====================================================
-🌐 TÚNEL CLOUDFLARE ATIVO (24/7 NA DISCLOUD)!
-👉 Link Completo: ${activeTunnelUrl}
+🌐 TÚNEL ATIVO E SEGURO (24/7 NA DISCLOUD)!
+👉 Link Completo: ${tunnel.url}
 👉 No Discord Dev Portal (Alvo): ${rawDomain}
-👉 Consulte a qualquer hora em: /api/tunnel
+👉 No Host Desktop: ${tunnel.url}
+👉 Status em tempo real: https://dodo.discloud.app/api/tunnel
 =====================================================
-        `);
-      }
-    };
+    `);
 
-    tunnelProc.stdout.on('data', handleOutput);
-    tunnelProc.stderr.on('data', handleOutput);
-
-    tunnelProc.on('error', (err) => {
-      console.warn('[Tunnel] Erro ao executar binário:', err.message);
+    tunnel.on('close', () => {
+      console.log('[Tunnel] Conexão do túnel encerrada. Reconectando em 5s...');
+      activeTunnelUrl = null;
+      setTimeout(() => startAutoTunnel(port), 5000);
     });
 
-    process.on('exit', () => {
-      try { tunnelProc.kill(); } catch (e) {}
+    tunnel.on('error', (err) => {
+      console.warn('[Tunnel Erro]:', err.message);
     });
   } catch (err) {
-    console.warn('[Tunnel] Exceção ao iniciar processo do túnel:', err.message);
+    console.warn('[Tunnel Falha]:', err.message);
+    setTimeout(() => startAutoTunnel(port), 5000);
   }
 }
 
