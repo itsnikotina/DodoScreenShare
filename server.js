@@ -42,11 +42,11 @@ const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 
 // Headers de segurança, CORS e permissão para Iframe do Discord (Discord Activity)
 app.use((req, res, next) => {
-  res.removeHeader('X-Frame-Options');
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.discordsays.com https://discord.com https://*.discord.com https://*.discord.gg https://discord.gg;");
+  res.setHeader('Content-Security-Policy', "frame-ancestors * https://*.discordsays.com https://discord.com https://*.discord.com;");
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
