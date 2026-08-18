@@ -1114,8 +1114,8 @@ function applyVolumeGain() {
   }
 
   if (dom.preview) {
-    dom.preview.volume = effectiveGain;
-    dom.preview.muted = state.isMuted;
+    dom.preview.volume = 0;
+    dom.preview.muted = true; // Mantém o elemento <video> sempre mudo para evitar áudio duplicado (o áudio 48kHz é gerenciado exclusivamente pelo Web Audio API)
   }
 }
 
