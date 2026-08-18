@@ -809,56 +809,68 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-async function startCloudflareTunnel(port) {
+let activeTunnelUrl = null;
+
+// Endpoint para consultar o link do túnel atual a qualquer momento
+app.get('/api/tunnel', (req, res) => {
+  res.json({
+    status: activeTunnelUrl ? 'online' : 'connecting',
+    tunnelUrl: activeTunnelUrl,
+    targetDomain: activeTunnelUrl ? activeTunnelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '') : null
+  });
+});
+
+async function startAutoTunnel(port) {
+  console.log('[Tunnel] Iniciando serviços de túnel 24/7 na Discloud...');
+
+  // 1. Tenta Cloudflare Tunnel via npx
   try {
-    console.log('[Tunnel] Iniciando túnel seguro automático 24/7...');
     const tunnelProc = spawn('npx', ['--yes', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    let foundUrl = false;
-    const parseOutput = (data) => {
+    const handleOutput = (data) => {
       const str = data.toString();
       const match = str.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-      if (match && !foundUrl) {
-        foundUrl = true;
-        const tunnelUrl = match[0];
-        const rawDomain = tunnelUrl.replace('https://', '');
+      if (match && !activeTunnelUrl) {
+        activeTunnelUrl = match[0];
+        const rawDomain = activeTunnelUrl.replace('https://', '');
         console.log(`
 =====================================================
 🌐 TÚNEL CLOUDFLARE ATIVO (24/7 NA DISCLOUD)!
-👉 Link Completo: ${tunnelUrl}
+👉 Link Completo: ${activeTunnelUrl}
 👉 No Discord Dev Portal (Alvo): ${rawDomain}
-👉 No Host Desktop: ${tunnelUrl}
+👉 Consulte a qualquer hora em: /api/tunnel
 =====================================================
         `);
       }
     };
 
-    tunnelProc.stdout.on('data', parseOutput);
-    tunnelProc.stderr.on('data', parseOutput);
+    tunnelProc.stdout.on('data', handleOutput);
+    tunnelProc.stderr.on('data', handleOutput);
 
-    tunnelProc.on('error', async () => {
-      try {
-        const localtunnelModule = await import('localtunnel');
-        const lt = localtunnelModule.default || localtunnelModule;
-        const tunnel = await lt({ port });
-        console.log(`
+    tunnelProc.on('error', () => {});
+  } catch (e) {}
+
+  // 2. Tenta simultaneamente o localtunnel com subdomínio fixo como garantia
+  try {
+    const localtunnelModule = await import('localtunnel');
+    const lt = localtunnelModule.default || localtunnelModule;
+    const tunnel = await lt({ port, subdomain: 'dodo-screenshare' }).catch(() => lt({ port }));
+    if (tunnel && tunnel.url) {
+      if (!activeTunnelUrl) activeTunnelUrl = tunnel.url;
+      const rawDomain = tunnel.url.replace(/^https?:\/\//, '');
+      console.log(`
 =====================================================
-🌐 TÚNEL SEGURO ATIVO (24/7 NA DISCLOUD)!
+🌐 TÚNEL LOCALTUNNEL ATIVO (24/7 NA DISCLOUD)!
 👉 Link Completo: ${tunnel.url}
-👉 No Discord Dev Portal (Alvo): ${tunnel.url.replace('https://', '')}
-👉 No Host Desktop: ${tunnel.url}
+👉 No Discord Dev Portal (Alvo): ${rawDomain}
+👉 Consulte a qualquer hora em: /api/tunnel
 =====================================================
-        `);
-      } catch (e) {}
-    });
-
-    process.on('exit', () => {
-      try { tunnelProc.kill(); } catch (e) {}
-    });
+      `);
+    }
   } catch (err) {
-    console.warn('[Tunnel] Falha ao iniciar túnel:', err.message);
+    console.warn('[Tunnel localtunnel]:', err.message);
   }
 }
 
@@ -872,6 +884,5 @@ server.listen(PORT, '0.0.0.0', () => {
 =====================================================
   `);
 
-  // Inicia o túnel Cloudflare automaticamente sem bloqueio de iframe
-  startCloudflareTunnel(PORT);
+  startAutoTunnel(PORT);
 });
