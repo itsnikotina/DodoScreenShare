@@ -455,10 +455,9 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
   log(`================ INICIANDO TRANSMISSÃO DESKTOP NATIVA ===============`, 'info');
   log(`ID da Fonte: "${sourceId}" | Resolução: ${resolution} @ ${fps} FPS | Áudio: ${includeAudio ? 'SIM' : 'NÃO'}`, 'info');
 
-  let maxW = 1280;
   let maxH = 720;
-  if (resolution === '1080p') { maxW = 1920; maxH = 1080; }
-  else if (resolution === '480p') { maxW = 854; maxH = 480; }
+  if (resolution === '1080p') { maxH = 1080; }
+  else if (resolution === '480p') { maxH = 480; }
 
   try {
     if (window.electronAPI && window.electronAPI.setActiveCaptureSource) {
@@ -470,7 +469,6 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           frameRate: { ideal: fps, max: fps },
-          width: { ideal: maxW, max: maxW },
           height: { ideal: maxH, max: maxH }
         },
         audio: includeAudio

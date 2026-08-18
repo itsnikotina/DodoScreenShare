@@ -1756,6 +1756,20 @@ async function handleOfferAndCreateAnswer(sdp, hostId) {
       if (event.track) {
         state.remoteStream.addTrack(event.track);
         dom.preview.play().catch(() => {});
+        if (dom.preview.videoWidth && dom.preview.videoHeight && dom.videoWrapper) {
+          dom.videoWrapper.style.aspectRatio = `${dom.preview.videoWidth} / ${dom.preview.videoHeight}`;
+        }
+      }
+    };
+
+    dom.preview.onloadedmetadata = () => {
+      if (dom.preview.videoWidth && dom.preview.videoHeight && dom.videoWrapper) {
+        dom.videoWrapper.style.aspectRatio = `${dom.preview.videoWidth} / ${dom.preview.videoHeight}`;
+      }
+    };
+    dom.preview.onresize = () => {
+      if (dom.preview.videoWidth && dom.preview.videoHeight && dom.videoWrapper) {
+        dom.videoWrapper.style.aspectRatio = `${dom.preview.videoWidth} / ${dom.preview.videoHeight}`;
       }
     };
 
