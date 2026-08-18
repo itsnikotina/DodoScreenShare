@@ -822,8 +822,67 @@ app.get('/api/tunnel', (req, res) => {
 });
 
 async function startAutoTunnel(port) {
+  console.log('[Tunnel] Iniciando túnel Cloudflare sem telas de aviso na Discloud...');
+
+  const binPath = path.join(__dirname, 'cloudflared');
+
+  // 1. Tenta baixar e executar o Cloudflare Tunnel localmente no diretório da aplicação
   try {
-    console.log('[Tunnel] Iniciando túnel seguro em Node.js (100% JS nativo)...');
+    if (!fs.existsSync(binPath)) {
+      console.log('[Tunnel] Baixando binário oficial do Cloudflare Linux em ./cloudflared...');
+      await new Promise((resolve, reject) => {
+        const dl = spawn('curl', ['-L', '-o', binPath, 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64']);
+        dl.on('close', (code) => {
+          if (code === 0) {
+            fs.chmodSync(binPath, 0o755);
+            resolve();
+          } else reject(new Error('curl falhou com code ' + code));
+        });
+        dl.on('error', reject);
+      });
+    }
+
+    if (fs.existsSync(binPath)) {
+      fs.chmodSync(binPath, 0o755);
+      const tunnelProc = spawn(binPath, ['tunnel', '--url', `http://localhost:${port}`], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      const handleOutput = (data) => {
+        const str = data.toString();
+        const match = str.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+        if (match) {
+          activeTunnelUrl = match[0];
+          const rawDomain = activeTunnelUrl.replace('https://', '');
+          console.log(`
+=====================================================
+🌐 TÚNEL CLOUDFLARE ATIVO (24/7 NA DISCLOUD)!
+👉 Link Completo: ${activeTunnelUrl}
+👉 No Discord Dev Portal (Alvo): ${rawDomain}
+👉 No Host Desktop: ${activeTunnelUrl}
+👉 Status API: https://dodo.discloud.app/api/tunnel
+=====================================================
+          `);
+        }
+      };
+
+      tunnelProc.stdout.on('data', handleOutput);
+      tunnelProc.stderr.on('data', handleOutput);
+
+      tunnelProc.on('error', () => startLocalTunnelFallback(port));
+      return;
+    }
+  } catch (cfErr) {
+    console.warn('[Tunnel Cloudflare Falha]:', cfErr.message);
+  }
+
+  // 2. Fallback para localtunnel caso o cloudflared não execute
+  startLocalTunnelFallback(port);
+}
+
+async function startLocalTunnelFallback(port) {
+  try {
+    console.log('[Tunnel] Iniciando túnel secundário via localtunnel...');
     const localtunnelModule = await import('localtunnel');
     const lt = localtunnelModule.default || localtunnelModule;
     const tunnel = await lt({ port });
@@ -836,24 +895,10 @@ async function startAutoTunnel(port) {
 🌐 TÚNEL ATIVO E SEGURO (24/7 NA DISCLOUD)!
 👉 Link Completo: ${tunnel.url}
 👉 No Discord Dev Portal (Alvo): ${rawDomain}
-👉 No Host Desktop: ${tunnel.url}
-👉 Status em tempo real: https://dodo.discloud.app/api/tunnel
+👉 Status API: https://dodo.discloud.app/api/tunnel
 =====================================================
     `);
-
-    tunnel.on('close', () => {
-      console.log('[Tunnel] Conexão do túnel encerrada. Reconectando em 5s...');
-      activeTunnelUrl = null;
-      setTimeout(() => startAutoTunnel(port), 5000);
-    });
-
-    tunnel.on('error', (err) => {
-      console.warn('[Tunnel Erro]:', err.message);
-    });
-  } catch (err) {
-    console.warn('[Tunnel Falha]:', err.message);
-    setTimeout(() => startAutoTunnel(port), 5000);
-  }
+  } catch (e) {}
 }
 
 server.listen(PORT, '0.0.0.0', () => {
