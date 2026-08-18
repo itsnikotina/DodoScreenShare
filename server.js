@@ -9,7 +9,7 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Carregar variáveis de ambiente de .env se existir
+// Carregar variáveis de ambiente de .env se existir (sem sobrescrever variáveis injetadas pela Discloud/Hospedagem)
 const envPath = path.join(__dirname, '.env');
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
@@ -18,7 +18,11 @@ if (fs.existsSync(envPath)) {
     if (trimmed && !trimmed.startsWith('#')) {
       const [key, ...values] = trimmed.split('=');
       if (key && values.length > 0) {
-        process.env[key.trim()] = values.join('=').trim();
+        const k = key.trim();
+        // Não sobrescreve se já fornecido pela nuvem (como PORT)
+        if (!process.env[k]) {
+          process.env[k] = values.join('=').trim();
+        }
       }
     }
   });
@@ -31,7 +35,8 @@ const wss = new WebSocketServer({
   maxPayload: 16 * 1024 * 1024 // 16MB
 });
 
-const PORT = process.env.PORT || 3000;
+// Porta padrão 8080 (padrão Discloud/Cloud) ou injetada no ambiente
+const PORT = process.env.PORT || 8080;
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '787371101177118750';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 
@@ -805,11 +810,11 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 =====================================================
 🚀 Servidor Multi-Stream Discord Activity PoC Rodando!
-📡 Porta HTTP & WebSocket: http://localhost:${PORT}
+📡 Porta HTTP & WebSocket: http://0.0.0.0:${PORT}
 🔑 Discord Client ID: ${DISCORD_CLIENT_ID}
 📁 Arquivos servidos da pasta: /public
 =====================================================
