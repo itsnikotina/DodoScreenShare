@@ -1723,22 +1723,27 @@ async function createOfferForViewer(viewerId) {
 }
 
 async function handleOfferAndCreateAnswer(sdp, hostId) {
-  if (!PeerConnectionClass || !isInsideDiscordActivity()) return;
+  if (!PeerConnectionClass) return;
   try {
-    if (state.viewerPeerConnection) state.viewerPeerConnection.close();
+    if (state.viewerPeerConnection) {
+      try { state.viewerPeerConnection.close(); } catch (e) {}
+    }
 
     const pc = new PeerConnectionClass(RTC_CONFIG);
     state.viewerPeerConnection = pc;
 
     state.remoteStream = new MediaStream();
     dom.preview.srcObject = state.remoteStream;
-    dom.preview.muted = true; // Áudio é reproduzido exclusivamente pelo AudioContext em 48kHz Estéreo
+    dom.preview.muted = true; // O áudio 48kHz é gerenciado exclusivamente pelo Web Audio API para máxima fidelidade
     dom.preview.classList.remove('hidden');
     dom.canvasPreview.classList.add('hidden');
     dom.videoPlaceholder.classList.add('hidden');
 
     pc.ontrack = (event) => {
-      state.remoteStream.addTrack(event.track);
+      if (event.track) {
+        state.remoteStream.addTrack(event.track);
+        dom.preview.play().catch(() => {});
+      }
     };
 
     pc.onicecandidate = (event) => {

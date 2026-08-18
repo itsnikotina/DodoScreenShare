@@ -512,30 +512,66 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
           window.electronAPI.removeNativeAudioListeners();
         }
         let sentChunks = 0;
-        window.electronAPI.onNativeAudioChunk((payload) => {
-          if (!state.isHosting) return;
-          sendSignal({ type: 'stream-audio', audio: payload });
+        // Configura AudioContext de saída para alimentar a faixa WebRTC em 48kHz Estéreo
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (state.hostAudioCtx) {
+            try { state.hostAudioCtx.close(); } catch (e) {}
+          }
+          state.hostAudioCtx = new AudioContextClass({ sampleRate: 48000 });
+          const dest = state.hostAudioCtx.createMediaStreamDestination();
+          state.audioStream = dest.stream;
+          let nextPlayTime = state.hostAudioCtx.currentTime;
 
-          sentChunks++;
-          try {
-            const bytes = Uint8Array.from(atob(payload.b64), c => c.charCodeAt(0));
-            const s16 = new Int16Array(bytes.buffer);
-            let sumL = 0, sumR = 0;
-            for (let i = 0; i < s16.length; i += 2) {
-              sumL += (s16[i] / 32768) ** 2;
-              sumR += (s16[i + 1] / 32768) ** 2;
-            }
-            const rmsL = Math.sqrt(sumL / (s16.length / 2));
-            const rmsR = Math.sqrt(sumR / (s16.length / 2));
-            const pctL = (rmsL * 100).toFixed(1);
-            const pctR = (rmsR * 100).toFixed(1);
+          window.electronAPI.onNativeAudioChunk((payload) => {
+            if (!state.isHosting) return;
+            // Também envia via sinalização para fallback
+            sendSignal({ type: 'stream-audio', audio: payload });
 
-            // Atualiza VU meter visual instantaneamente com zero peso no console de logs
-            if (dom.audioDbText) dom.audioDbText.textContent = `E: ${pctL}% | D: ${pctR}%`;
-            if (dom.audioVuBar) dom.audioVuBar.style.width = `${Math.min(100, Math.max(rmsL, rmsR) * 150)}%`;
-          } catch (e) {}
-        });
-        log(`🔊 Áudio nativo conectado com sucesso! (Estéreo 48kHz via ${nativeStereoResult?.tool || 'parec'})`, 'success');
+            sentChunks++;
+            try {
+              const bytes = Uint8Array.from(atob(payload.b64), c => c.charCodeAt(0));
+              const s16 = new Int16Array(bytes.buffer);
+              const samplesPerChannel = Math.floor(s16.length / 2);
+              
+              if (samplesPerChannel > 0 && state.hostAudioCtx && state.hostAudioCtx.state === 'running') {
+                const audioBuffer = state.hostAudioCtx.createBuffer(2, samplesPerChannel, 48000);
+                const left = new Float32Array(samplesPerChannel);
+                const right = new Float32Array(samplesPerChannel);
+                let sumL = 0, sumR = 0;
+                for (let i = 0; i < samplesPerChannel; i++) {
+                  left[i] = s16[i * 2] / 32768;
+                  right[i] = s16[i * 2 + 1] / 32768;
+                  sumL += left[i] * left[i];
+                  sumR += right[i] * right[i];
+                }
+                audioBuffer.copyToChannel(left, 0);
+                audioBuffer.copyToChannel(right, 1);
+
+                const src = state.hostAudioCtx.createBufferSource();
+                src.buffer = audioBuffer;
+                src.connect(dest);
+
+                const now = state.hostAudioCtx.currentTime;
+                if (nextPlayTime < now || (nextPlayTime - now) > 0.1) nextPlayTime = now + 0.01;
+                src.start(nextPlayTime);
+                nextPlayTime += audioBuffer.duration;
+
+                const rmsL = Math.sqrt(sumL / samplesPerChannel);
+                const rmsR = Math.sqrt(sumR / samplesPerChannel);
+                const pctL = (rmsL * 100).toFixed(1);
+                const pctR = (rmsR * 100).toFixed(1);
+
+                // Atualiza VU meter visual instantaneamente
+                if (dom.audioDbText) dom.audioDbText.textContent = `E: ${pctL}% | D: ${pctR}%`;
+                if (dom.audioVuBar) dom.audioVuBar.style.width = `${Math.min(100, Math.max(rmsL, rmsR) * 150)}%`;
+              }
+            } catch (e) {}
+          });
+          log(`🔊 Áudio nativo conectado à transmissão P2P! (Estéreo 48kHz via ${nativeStereoResult?.tool || 'parec'})`, 'success');
+        } catch (ctxErr) {
+          log(`⚠️ Falha ao criar stream de áudio P2P: ${ctxErr.message}`, 'warn');
+        }
       } else {
         log(`⚠️ Áudio nativo indisponível (${nativeStereoResult?.error || 'fallback'}). Usando getUserMedia.`, 'warn');
         // Fallback: getUserMedia (pode ser mono no Linux — fallback apenas para Windows/Mac)
