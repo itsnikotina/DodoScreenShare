@@ -1668,9 +1668,11 @@ function playIncomingAudioChunk(audioPayload) {
     source.connect(state.viewerGainNode);
 
     const now = ctx.currentTime;
-    // Sincronização ultra-estrita (máximo 40ms de margem) para áudio sem nenhum atraso em relação ao vídeo
-    if (state.audioNextPlayTime < now || (state.audioNextPlayTime - now) > 0.04) {
-      state.audioNextPlayTime = now + 0.005;
+    // Jitter buffer suave (120ms de tolerância) para eliminar ruídos, cortes e estalos sem causar delay perceptível
+    if (state.audioNextPlayTime < now) {
+      state.audioNextPlayTime = now + 0.025;
+    } else if ((state.audioNextPlayTime - now) > 0.15) {
+      state.audioNextPlayTime = now + 0.05;
     }
 
     source.start(state.audioNextPlayTime);

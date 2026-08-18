@@ -137,21 +137,27 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       nativeAudioProcess = null;
     }
 
-    // Configura o canal virtual Dodo_Audio de alta fidelidade 48kHz estéreo
-    await setupAutomaticAudioIsolation();
-
-    // Monitor do canal Dodo_Audio
-    let monitorDevice = 'Dodo_Audio.monitor';
+    // Descobre a saída padrão ativa (fones do usuário) para gravar o som do PC sem capturar o microfone
+    let monitorDevice = null;
+    try {
+      const { stdout: sinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
+      const defSink = sinkOut.trim();
+      if (defSink && !defSink.includes('Dodo_Audio') && !defSink.includes('null')) {
+        monitorDevice = `${defSink}.monitor`;
+      }
+    } catch (e) {}
 
     const args = [
       '--format=s16le',
       '--rate=48000',
       '--channels=2',
-      '--latency-msec=20',
-      '-d', monitorDevice
+      '--latency-msec=20'
     ];
+    if (monitorDevice) {
+      args.push('-d', monitorDevice);
+    }
 
-    console.log(`[Native Audio] Iniciando parec gravando de: ${monitorDevice}`);
+    console.log(`[Native Audio] Gravando som do sistema de: ${monitorDevice || 'Monitor Padrão'} (Sem Microfone)`);
 
     let p = null;
     let toolName = 'parec';
@@ -160,7 +166,10 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     } catch (err) {
       try {
         toolName = 'pw-record';
-        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-d', monitorDevice, '-'], { env: process.env });
+        const pwArgs = ['--channels=2', '--rate=48000', '--format=s16'];
+        if (monitorDevice) pwArgs.push('-d', monitorDevice);
+        pwArgs.push('-');
+        p = spawn('pw-record', pwArgs, { env: process.env });
       } catch (err2) {
         return { success: false, error: 'Nem parec nem pw-record encontrados' };
       }
