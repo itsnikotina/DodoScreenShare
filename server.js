@@ -40,27 +40,25 @@ const PORT = process.env.PORT || 8080;
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '787371101177118750';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 
-// Servir arquivos estáticos da pasta /public
+// Headers de segurança, CORS e permissão para Iframe do Discord (Discord Activity)
 app.use((req, res, next) => {
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.discordsays.com https://discord.com https://*.discord.com *;");
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   next();
 });
 
+// Servir arquivos estáticos da pasta /public
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
   maxAge: 0
 }));
 app.use(express.json());
-
-// Headers de segurança e CORS
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
 
 // Rotas de Termos de Serviço e Privacidade
 app.get('/terms', (req, res) => {
