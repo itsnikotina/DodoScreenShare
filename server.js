@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import fs from 'fs';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -808,6 +809,45 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+function startCloudflareTunnel(port) {
+  try {
+    console.log('[Cloudflare Tunnel] Iniciando túnel Cloudflare automático 24/7...');
+    const tunnelProc = spawn('npx', ['--yes', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    const parseOutput = (data) => {
+      const str = data.toString();
+      const match = str.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+      if (match) {
+        const tunnelUrl = match[0];
+        const rawDomain = tunnelUrl.replace('https://', '');
+        console.log(`
+=====================================================
+🌐 TÚNEL CLOUDFLARE ATIVO (24/7 NA DISCLOUD)!
+👉 Link Completo: ${tunnelUrl}
+👉 No Discord Dev Portal (Alvo): ${rawDomain}
+👉 No Host Desktop: ${tunnelUrl}
+=====================================================
+        `);
+      }
+    };
+
+    tunnelProc.stdout.on('data', parseOutput);
+    tunnelProc.stderr.on('data', parseOutput);
+
+    tunnelProc.on('error', (err) => {
+      console.warn('[Cloudflare Tunnel] Erro ao rodar cloudflared:', err.message);
+    });
+
+    process.on('exit', () => {
+      try { tunnelProc.kill(); } catch (e) {}
+    });
+  } catch (err) {
+    console.warn('[Cloudflare Tunnel] Falha ao iniciar túnel:', err.message);
+  }
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 =====================================================
@@ -817,4 +857,7 @@ server.listen(PORT, '0.0.0.0', () => {
 📁 Arquivos servidos da pasta: /public
 =====================================================
   `);
+
+  // Inicia o túnel Cloudflare automaticamente sem bloqueio de iframe
+  startCloudflareTunnel(PORT);
 });
