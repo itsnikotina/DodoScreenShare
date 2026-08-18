@@ -325,14 +325,11 @@ function cleanEmptyRoom(roomId) {
   }
 }
 
-// Retorna lista com todas as transmissões ativas no servidor
+// Retorna lista de transmissões ativas ESTRITAMENTE da sala especificada
 function getStreamsList(room) {
   const list = [];
-  const seenHostIds = new Set();
-
   if (room && room.hosts) {
     room.hosts.forEach((host, hostId) => {
-      seenHostIds.add(hostId);
       list.push({
         hostId: hostId,
         profile: host.profile || { username: 'Host ' + hostId, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
@@ -340,48 +337,34 @@ function getStreamsList(room) {
       });
     });
   }
-
-  rooms.forEach((otherRoom) => {
-    otherRoom.hosts.forEach((host, hostId) => {
-      if (!seenHostIds.has(hostId)) {
-        seenHostIds.add(hostId);
-        list.push({
-          hostId: hostId,
-          profile: host.profile || { username: 'Host ' + hostId, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
-          viewersCount: host.viewers.size
-        });
-      }
-    });
-  });
-
   return list;
 }
 
-// Retorna lista de todos os participantes conectados na chamada (sem duplicatas genéricas)
+// Retorna lista de participantes conectados ESTRITAMENTE na chamada especificada
 function getParticipantsList(room) {
   const list = [];
+  if (!room) return list;
+
   const seenUsernames = new Set();
   const seenIds = new Set();
 
-  // 1. Membros reais da chamada vindos do Discord Voice SDK
-  rooms.forEach((r) => {
-    if (r.voiceParticipants && Array.isArray(r.voiceParticipants)) {
-      r.voiceParticipants.forEach((vp) => {
-        if (vp.profile && vp.profile.username) {
-          const lowerName = vp.profile.username.toLowerCase();
-          if (!seenUsernames.has(lowerName)) {
-            seenUsernames.add(lowerName);
-            seenIds.add(vp.id);
-            list.push(vp);
-          }
+  // 1. Membros reais da chamada vindos do Discord Voice SDK nesta sala
+  if (room.voiceParticipants && Array.isArray(room.voiceParticipants)) {
+    room.voiceParticipants.forEach((vp) => {
+      if (vp.profile && vp.profile.username) {
+        const lowerName = vp.profile.username.toLowerCase();
+        if (!seenUsernames.has(lowerName)) {
+          seenUsernames.add(lowerName);
+          seenIds.add(vp.id);
+          list.push(vp);
         }
-      });
-    }
-  });
+      }
+    });
+  }
 
-  // 2. Participantes conectados via Web / OAuth2 com perfil conhecido
-  rooms.forEach((r) => {
-    r.participants.forEach((p, pId) => {
+  // 2. Participantes conectados via Web / Discord Activity nesta sala
+  if (room.participants) {
+    room.participants.forEach((p, pId) => {
       if (p.profile && p.profile.username) {
         const lowerName = p.profile.username.toLowerCase();
         if (!seenUsernames.has(lowerName) && !seenIds.has(pId)) {
@@ -391,33 +374,44 @@ function getParticipantsList(room) {
             id: pId,
             platform: p.platform || 'web',
             profile: p.profile,
-            isStreaming: r.hosts.has(pId),
+            isStreaming: room.hosts.has(pId),
             watchingHostId: p.watchingHostId
           });
         }
       }
     });
-  });
+  }
 
   return list;
 }
 
-// Notifica TODOS os participantes sobre transmissões e membros da chamada
-function broadcastStreamsList() {
-  rooms.forEach((r) => {
-    const streams = getStreamsList(r);
-    const participants = getParticipantsList(r);
-    const payload = JSON.stringify({
-      type: 'streams-updated',
-      streams: streams,
-      participants: participants
-    });
+// Notifica participantes ESTRITAMENTE dentro de suas respectivas chamadas (Zero vazamento entre chamadas)
+function broadcastStreamsList(specificRoomId = null) {
+  if (specificRoomId) {
+    const r = rooms.get(specificRoomId);
+    if (r) broadcastToSingleRoom(r);
+    return;
+  }
 
-    r.participants.forEach((p) => {
-      if (p.ws.readyState === WebSocket.OPEN) {
-        p.ws.send(payload);
-      }
-    });
+  rooms.forEach((r) => {
+    broadcastToSingleRoom(r);
+  });
+}
+
+function broadcastToSingleRoom(r) {
+  const streams = getStreamsList(r);
+  const participants = getParticipantsList(r);
+  const payload = JSON.stringify({
+    type: 'streams-updated',
+    roomId: r.id,
+    streams: streams,
+    participants: participants
+  });
+
+  r.participants.forEach((p) => {
+    if (p.ws.readyState === WebSocket.OPEN) {
+      p.ws.send(payload);
+    }
   });
 }
 
@@ -662,85 +656,92 @@ wss.on('connection', (ws, req) => {
         break;
       }
 
-      // 6. Encaminhamento de Quadros de Vídeo (Para todos os espectadores inscritos neste Host)
+      // 6. Encaminhamento de Quadros de Vídeo (Apenas para espectadores nesta mesma chamada)
       case 'stream-frame': {
+        if (!ws.roomId) return;
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+
         const payload = JSON.stringify({
           type: 'stream-frame',
           hostId: peerId,
           frame: frame
         });
 
-        rooms.forEach((r) => {
-          r.participants.forEach((p) => {
-            if (p.watchingHostId === peerId && p.ws.readyState === WebSocket.OPEN) {
-              p.ws.send(payload);
-            }
-          });
+        room.participants.forEach((p) => {
+          if (p.watchingHostId === peerId && p.ws.readyState === WebSocket.OPEN) {
+            p.ws.send(payload);
+          }
         });
         break;
       }
 
-      // 7. Encaminhamento de Áudio PCM (Para todos os espectadores inscritos neste Host)
+      // 7. Encaminhamento de Áudio PCM (Apenas para espectadores nesta mesma chamada)
       case 'stream-audio': {
+        if (!ws.roomId) return;
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+
         const payload = JSON.stringify({
           type: 'stream-audio',
           hostId: peerId,
           audio: audio
         });
 
-        rooms.forEach((r) => {
-          r.participants.forEach((p) => {
-            if (p.watchingHostId === peerId && p.ws.readyState === WebSocket.OPEN) {
-              p.ws.send(payload);
-            }
-          });
+        room.participants.forEach((p) => {
+          if (p.watchingHostId === peerId && p.ws.readyState === WebSocket.OPEN) {
+            p.ws.send(payload);
+          }
         });
         break;
       }
 
-      // 8. Sinalização WebRTC (Offer, Answer, ICE)
+      // 8. Sinalização WebRTC P2P (Offer, Answer, ICE - Estritamente na mesma chamada)
       case 'offer': {
-        if (!targetId) return;
-        rooms.forEach((r) => {
-          const target = r.participants.get(targetId);
-          if (target && target.ws.readyState === WebSocket.OPEN) {
-            target.ws.send(JSON.stringify({
-              type: 'offer',
-              from: peerId,
-              sdp
-            }));
-          }
-        });
+        if (!targetId || !ws.roomId) return;
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+
+        const target = room.participants.get(targetId);
+        if (target && target.ws.readyState === WebSocket.OPEN) {
+          target.ws.send(JSON.stringify({
+            type: 'offer',
+            from: peerId,
+            sdp
+          }));
+        }
         break;
       }
 
       case 'answer': {
-        if (!targetId) return;
-        rooms.forEach((r) => {
-          const target = r.hosts.get(targetId) || r.participants.get(targetId);
-          if (target && target.ws.readyState === WebSocket.OPEN) {
-            target.ws.send(JSON.stringify({
-              type: 'answer',
-              from: peerId,
-              sdp
-            }));
-          }
-        });
+        if (!targetId || !ws.roomId) return;
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+
+        const target = room.hosts.get(targetId) || room.participants.get(targetId);
+        if (target && target.ws.readyState === WebSocket.OPEN) {
+          target.ws.send(JSON.stringify({
+            type: 'answer',
+            from: peerId,
+            sdp
+          }));
+        }
         break;
       }
 
       case 'ice-candidate': {
-        if (!targetId) return;
-        rooms.forEach((r) => {
-          const target = r.participants.get(targetId) || r.hosts.get(targetId);
-          if (target && target.ws.readyState === WebSocket.OPEN) {
-            target.ws.send(JSON.stringify({
-              type: 'ice-candidate',
-              from: peerId,
-              candidate
-            }));
-          }
-        });
+        if (!targetId || !ws.roomId) return;
+        const room = rooms.get(ws.roomId);
+        if (!room) return;
+
+        const target = room.participants.get(targetId) || room.hosts.get(targetId);
+        if (target && target.ws.readyState === WebSocket.OPEN) {
+          target.ws.send(JSON.stringify({
+            type: 'ice-candidate',
+            from: peerId,
+            candidate
+          }));
+        }
         break;
       }
     }

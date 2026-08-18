@@ -21,7 +21,7 @@ const state = {
   serverUrl: localStorage.getItem('dodo_desktop_server_url') || 'http://localhost:3000',
   ws: null,
   peerId: null,
-  roomId: 'call-geral',
+  roomId: localStorage.getItem('dodo_desktop_room_id') || 'call-geral',
   isHosting: false,
   selectedSourceId: null,
   selectedSourceType: 'screens',
@@ -46,6 +46,8 @@ const dom = {
   roomBadgeTag: document.getElementById('roomBadgeTag'),
   serverUrlInput: document.getElementById('serverUrlInput'),
   btnApplyServerUrl: document.getElementById('btnApplyServerUrl'),
+  roomIdInput: document.getElementById('roomIdInput'),
+  btnApplyRoomId: document.getElementById('btnApplyRoomId'),
   btnOpenDiscordActivity: document.getElementById('btnOpenDiscordActivity'),
   btnCheckUpdates: document.getElementById('btnCheckUpdates'),
   btnCheckUpdatesText: document.getElementById('btnCheckUpdatesText'),
@@ -965,6 +967,27 @@ dom.btnApplyServerUrl.addEventListener('click', () => {
     initWebSocket();
   }
 });
+
+if (dom.btnApplyRoomId && dom.roomIdInput) {
+  dom.roomIdInput.value = state.roomId;
+  dom.btnApplyRoomId.addEventListener('click', () => {
+    const val = dom.roomIdInput.value.trim();
+    if (val) {
+      state.roomId = val;
+      localStorage.setItem('dodo_desktop_room_id', val);
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        sendSignal({
+          type: 'join-room',
+          roomId: state.roomId,
+          platform: 'desktop',
+          profile: { username: 'Host Desktop', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' }
+        });
+        dom.roomBadgeTag.textContent = state.roomId.startsWith('call-') ? state.roomId : `Canal #${state.roomId.slice(0, 10)}`;
+        log(`Canal de voz alterado para: "${state.roomId}"`, 'info');
+      }
+    }
+  });
+}
 
 dom.btnOpenDiscordActivity.addEventListener('click', () => {
   dom.inputActivityUrl.value = state.serverUrl;

@@ -491,6 +491,19 @@ function detectVoiceChannelRoom() {
     dom.diagRoomName.textContent = 'Canal Principal';
   }
 
+  if (dom.diagRoomName) {
+    dom.diagRoomName.style.cursor = 'pointer';
+    dom.diagRoomName.title = 'Clique para copiar o ID desta sala/call';
+    dom.diagRoomName.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(state.roomId);
+        const original = dom.diagRoomName.textContent;
+        dom.diagRoomName.textContent = 'ID Copiado!';
+        setTimeout(() => { dom.diagRoomName.textContent = original; }, 2000);
+      } catch (e) {}
+    });
+  }
+
   if (isInsideDiscordActivity()) {
     document.body.classList.add('discord-activity-mode');
   } else {
