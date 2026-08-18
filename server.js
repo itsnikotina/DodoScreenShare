@@ -86,7 +86,7 @@ function getPublicServerUrl(req) {
   if (host && !host.includes('discordsays.com') && !host.includes('discord.com')) {
     return `${proto}://${host}/`;
   }
-  return 'https://dodoscreenshare.onrender.com/';
+  return 'https://dodo.discloud.app/';
 }
 
 // Rota de Configuração Dinâmica para Clientes Web / Discord Activity
