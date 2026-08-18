@@ -137,18 +137,27 @@ ipcMain.handle('start-native-stereo-audio', async () => {
       nativeAudioProcess = null;
     }
 
-    // Monitor oficial do sink de saída ativo do usuário (Fones / Som do PC sem Microfone)
-    let monitorDevice = '@DEFAULT_SINK@.monitor';
+    // Descobre o sink padrão atual do sistema
+    let monitorDevice = null;
+    try {
+      const { stdout: sinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
+      const defSink = sinkOut.trim();
+      if (defSink) {
+        monitorDevice = `${defSink}.monitor`;
+      }
+    } catch (e) {}
 
     const args = [
       '--format=s16le',
       '--rate=48000',
       '--channels=2',
-      '--latency-msec=20',
-      '-d', monitorDevice
+      '--latency-msec=20'
     ];
+    if (monitorDevice) {
+      args.push('-d', monitorDevice);
+    }
 
-    console.log(`[Native Audio] Iniciando parec gravando de: ${monitorDevice}`);
+    console.log(`[Native Audio] Iniciando parec com dispositivo: ${monitorDevice || 'Padrão'}`);
 
     let p = null;
     let toolName = 'parec';
@@ -157,7 +166,7 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     } catch (err) {
       try {
         toolName = 'pw-record';
-        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-d', monitorDevice, '-'], { env: process.env });
+        p = spawn('pw-record', ['--channels=2', '--rate=48000', '--format=s16', '-'], { env: process.env });
       } catch (err2) {
         return { success: false, error: 'Nem parec nem pw-record encontrados' };
       }
@@ -182,22 +191,81 @@ ipcMain.handle('start-native-stereo-audio', async () => {
     });
 
     nativeAudioProcess = p;
-    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch, ${monitorDevice}) iniciada com sucesso!`);
-    return { success: true, tool: toolName, device: monitorDevice };
+    console.log(`[Native Audio] Captura de áudio Estéreo HD (${toolName} 48kHz 2ch, ${monitorDevice || 'Padrão'}) iniciada com sucesso!`);
+    return { success: true, tool: toolName, device: monitorDevice || 'default' };
   } catch (err) {
     console.warn('[Native Audio] Falha ao iniciar áudio nativo:', err.message);
     return { success: false, error: err.message };
   }
 });
 
-ipcMain.handle('stop-native-stereo-audio', async () => {
+ipcMain.handle('stop-native-stereo-audio', () => {
   if (nativeAudioProcess) {
     try { nativeAudioProcess.kill(); } catch (e) {}
     nativeAudioProcess = null;
   }
-  await cleanupAudioIsolation();
   return true;
 });
+
+// Configuração 100% Automática de Isolamento de Áudio (Estilo Parsec/Discord no Linux)
+async function setupAutomaticAudioIsolation() {
+  if (process.platform !== 'linux') return;
+  try {
+    // 1. Salva o dispositivo físico padrão original do usuário (fones de ouvido)
+    if (!originalDefaultSink) {
+      try {
+        const { stdout: defSinkOut } = await execAsync('pactl get-default-sink 2>/dev/null || pactl info | grep "Default Sink" | cut -d: -f2');
+        const trimmed = defSinkOut.trim();
+        if (trimmed && trimmed !== 'Dodo_Audio') {
+          originalDefaultSink = trimmed;
+        }
+      } catch (e) {}
+    }
+
+    // 2. Limpa instâncias anteriores
+    await execAsync('pactl unload-module $(pactl list short modules | grep "sink_name=Dodo_Audio" | awk \'{print $1}\') 2>/dev/null || true');
+    await execAsync('pactl unload-module $(pactl list short modules | grep "source=Dodo_Audio.monitor" | awk \'{print $1}\') 2>/dev/null || true');
+
+    // 3. Cria o canal de áudio Dodo_Audio (Forçado em Estéreo 48kHz 2 Canais L/R)
+    const { stdout: sinkOut } = await execAsync('pactl load-module module-null-sink sink_name=Dodo_Audio rate=48000 channels=2 channel_map=front-left,front-right sink_properties=device.description="Dodo_Game_Audio"');
+    audioModuleSinkId = sinkOut.trim();
+
+    // 4. Cria o loopback para os fones do usuário em Estéreo
+    const targetSink = originalDefaultSink || '@DEFAULT_SINK@';
+    const { stdout: loopOut } = await execAsync(`pactl load-module module-loopback source=Dodo_Audio.monitor sink="${targetSink}" rate=48000 channels=2 latency_msec=1`);
+    audioModuleLoopbackId = loopOut.trim();
+
+    // 5. Direciona os jogos/sistema para Dodo_Audio
+    await execAsync('pactl set-default-sink Dodo_Audio');
+
+    // 6. Move imediatamente e continuamente o Discord para os fones físicos (Zero eco na live)
+    async function isolateDiscordAudio() {
+      try {
+        const { stdout: inputsOut } = await execAsync('pactl list sink-inputs');
+        const blocks = inputsOut.split(/Entrada do destino #|Sink Input #/).filter(Boolean);
+        for (const block of blocks) {
+          const idMatch = block.match(/^(\d+)/);
+          if (!idMatch) continue;
+          const inputId = idMatch[1];
+          const isDiscord = /application\.process\.binary\s*=\s*"Discord"|application\.name\s*=\s*"WEBRTC VoiceEngine"|application\.name\s*=\s*"Discord"/i.test(block);
+          if (isDiscord) {
+            const hwSink = originalDefaultSink || '@DEFAULT_SINK@';
+            await execAsync(`pactl move-sink-input ${inputId} "${hwSink}" 2>/dev/null || true`);
+          }
+        }
+      } catch (e) {}
+    }
+
+    await isolateDiscordAudio();
+
+    if (isolationInterval) clearInterval(isolationInterval);
+    isolationInterval = setInterval(isolateDiscordAudio, 2000);
+
+    console.log('[Audio Isolation] Isolamento ativo! Jogos -> Dodo_Audio | Discord -> Fones físicos.');
+  } catch (err) {
+    console.warn('[Audio Isolation] Inicialização do canal de áudio:', err.message);
+  }
+}
 
 async function cleanupAudioIsolation() {
   if (process.platform !== 'linux') return;
@@ -206,15 +274,18 @@ async function cleanupAudioIsolation() {
       clearInterval(isolationInterval);
       isolationInterval = null;
     }
-    await execAsync(`
-      for mod in $(pactl list short modules 2>/dev/null | grep -E "Dodo_Audio|module-loopback.*Dodo" | awk '{print $1}'); do
-        pactl unload-module $mod 2>/dev/null || true
-      done
-    `);
+    if (originalDefaultSink) {
+      await execAsync(`pactl set-default-sink "${originalDefaultSink}" 2>/dev/null || true`);
+    }
+    if (audioModuleLoopbackId) await execAsync(`pactl unload-module ${audioModuleLoopbackId} 2>/dev/null || true`);
+    if (audioModuleSinkId) await execAsync(`pactl unload-module ${audioModuleSinkId} 2>/dev/null || true`);
   } catch (e) {}
 }
 
 ipcMain.handle('ensure-audio-isolation', async () => {
+  if (process.platform === 'linux') {
+    await setupAutomaticAudioIsolation();
+  }
   return true;
 });
 
@@ -308,11 +379,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
-
-  // Limpa quaisquer módulos virtuais residuais para não duplicar o som do usuário
-  if (process.platform === 'linux') {
-    cleanupAudioIsolation().catch(() => {});
-  }
+  setupAutomaticAudioIsolation();
 
   // Auto-Updater: Verifica atualizações automaticamente ao abrir e a cada 2 minutos
   setTimeout(() => { checkForUpdates(true); }, 3000);
@@ -323,8 +390,7 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', async () => {
-  await cleanupAudioIsolation();
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -332,16 +398,4 @@ app.on('window-all-closed', async () => {
 
 app.on('before-quit', async () => {
   await cleanupAudioIsolation();
-});
-
-app.on('will-quit', async () => {
-  await cleanupAudioIsolation();
-});
-
-// Captura encerramento via Ctrl + C ou fechamento do terminal
-['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((sig) => {
-  process.on(sig, async () => {
-    await cleanupAudioIsolation();
-    process.exit(0);
-  });
 });

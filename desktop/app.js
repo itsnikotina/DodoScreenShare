@@ -471,7 +471,7 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
           width: { ideal: maxW, max: maxW },
           height: { ideal: maxH, max: maxH }
         },
-        audio: false // Áudio nativo 48kHz Estéreo é gerenciado exclusivamente pelo parec/pw-record sem duplicidade
+        audio: includeAudio
       });
     } catch (err1) {
       stream = await navigator.mediaDevices.getDisplayMedia({
@@ -529,9 +529,16 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
             const pctL = (rmsL * 100).toFixed(1);
             const pctR = (rmsR * 100).toFixed(1);
 
-            // Atualiza VU meter visual instantaneamente com zero peso no console de logs
+            // Atualiza VU meter visual instantaneamente
             if (dom.audioDbText) dom.audioDbText.textContent = `E: ${pctL}% | D: ${pctR}%`;
             if (dom.audioVuBar) dom.audioVuBar.style.width = `${Math.min(100, Math.max(rmsL, rmsR) * 150)}%`;
+
+            // Log contínuo em tempo real (a cada ~80ms / 12x por segundo para fluidez máxima)
+            const now = performance.now();
+            if (now - lastLogTime >= 80) {
+              lastLogTime = now;
+              log(`🔊 Estéreo Nativo [Canal E: ${pctL}% | Canal D: ${pctR}%] (#${sentChunks})`, 'info');
+            }
           } catch (e) {}
         });
         log(`🔊 Áudio nativo conectado com sucesso! (Estéreo 48kHz via ${nativeStereoResult?.tool || 'parec'})`, 'success');
@@ -730,9 +737,16 @@ function startAudioStreamer(audioStream) {
       const pctL = (rmsL * 100).toFixed(1);
       const pctR = (rmsR * 100).toFixed(1);
 
-      // Atualiza VU meter visual instantaneamente com zero peso no console de logs
+      // Atualiza VU meter visual instantaneamente
       if (dom.audioDbText) dom.audioDbText.textContent = `E: ${pctL}% | D: ${pctR}%`;
       if (dom.audioVuBar) dom.audioVuBar.style.width = `${Math.min(100, Math.max(rmsL, rmsR) * 150)}%`;
+
+      if (!state.lastFallbackLogTime) state.lastFallbackLogTime = 0;
+      const now = performance.now();
+      if (now - state.lastFallbackLogTime >= 80) {
+        state.lastFallbackLogTime = now;
+        log(`🔊 Estéreo Ativo [Canal E: ${pctL}% | Canal D: ${pctR}%] (#${sentChunks})`, 'info');
+      }
     };
 
     source.connect(state.scriptProcessor);
@@ -947,16 +961,6 @@ dom.btnClearLogs.addEventListener('click', () => {
   dom.logsTerminal.innerHTML = '';
   dom.logCountBadge.textContent = '0';
 });
-
-if (dom.btnToggleLogs && dom.cardLogs) {
-  dom.btnToggleLogs.addEventListener('click', () => {
-    dom.cardLogs.classList.toggle('collapsed');
-    const isCollapsed = dom.cardLogs.classList.contains('collapsed');
-    if (dom.iconToggleLogs) {
-      dom.iconToggleLogs.setAttribute('icon', isCollapsed ? 'lucide:chevron-down' : 'lucide:chevron-up');
-    }
-  });
-}
 
 // Auto-Updater In-App
 if (dom.btnCheckUpdates) {
