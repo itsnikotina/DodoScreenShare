@@ -812,14 +812,16 @@ wss.on('connection', (ws, req) => {
 function startCloudflareTunnel(port) {
   try {
     console.log('[Cloudflare Tunnel] Iniciando túnel Cloudflare automático 24/7...');
-    const tunnelProc = spawn('npx', ['--yes', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
+    const tunnelProc = spawn('npx', ['cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
+    let foundUrl = false;
     const parseOutput = (data) => {
       const str = data.toString();
       const match = str.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-      if (match) {
+      if (match && !foundUrl) {
+        foundUrl = true;
         const tunnelUrl = match[0];
         const rawDomain = tunnelUrl.replace('https://', '');
         console.log(`
