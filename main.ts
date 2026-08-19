@@ -186,13 +186,6 @@ function notifyHostViewers(hostId: string) {
   }
 }
 
-// Sincronização periódica contínua a cada 2.5s para garantir atualização instantânea
-setInterval(() => {
-  if (rooms.size > 0) {
-    broadcastStreamsList();
-  }
-}, 2500);
-
 // Handler Principal HTTP & WebSocket do Deno
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);

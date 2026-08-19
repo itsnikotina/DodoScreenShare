@@ -245,7 +245,7 @@ ipcMain.handle('login-with-discord', async () => {
     });
 
     authServer.listen(port, '127.0.0.1', () => {
-      const authUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify%20guilds%20voice`;
+      const authUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify`;
       shell.openExternal(authUrl);
     });
 

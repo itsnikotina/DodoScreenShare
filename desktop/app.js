@@ -1162,7 +1162,7 @@ if (dom.btnLoginWithDiscord) {
 
     const CLIENT_ID = '787371101177118750';
     const REDIRECT_URI = 'https://dodoscreenshare.itsnikotina.deno.net/';
-    const authUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify%20guilds%20voice&state=${authId}`;
+    const authUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify&state=${authId}`;
 
     if (window.electronAPI && window.electronAPI.openBrowserUrl) {
       window.electronAPI.openBrowserUrl(authUrl);
