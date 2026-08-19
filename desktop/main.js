@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
+import http from 'http';
 import { fileURLToPath } from 'url';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
@@ -125,6 +126,118 @@ ipcMain.handle('reload-app', () => {
     mainWindow.reload();
   }
   return true;
+});
+
+// Autenticação Oficial Discord via Navegador Padrão + Callback Local
+let authServer = null;
+
+ipcMain.handle('login-with-discord', async () => {
+  return new Promise((resolve) => {
+    if (authServer) {
+      try { authServer.close(); } catch (e) {}
+      authServer = null;
+    }
+
+    const port = 48291;
+    const CLIENT_ID = '787371101177118750';
+    const REDIRECT_URI = `http://127.0.0.1:${port}/callback`;
+
+    authServer = http.createServer(async (req, res) => {
+      try {
+        const parsedUrl = new URL(req.url, `http://127.0.0.1:${port}`);
+        
+        if (parsedUrl.pathname === '/callback') {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="utf-8">
+              <title>Dodo Screen Share - Login Concluído</title>
+              <style>
+                * { box-sizing: border-box; }
+                body { background-color: #0b0e14; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                .card { background: #151922; border: 1px solid rgba(88, 101, 242, 0.4); border-radius: 16px; padding: 40px 32px; text-align: center; max-width: 420px; box-shadow: 0 16px 36px rgba(0,0,0,0.6); }
+                .icon { width: 64px; height: 64px; background: rgba(88, 101, 242, 0.15); border: 2px solid #5865f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 32px; }
+                h2 { margin: 0 0 10px; font-size: 22px; color: #fff; }
+                p { color: #8a93a5; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+                .badge { background: #232836; padding: 8px 14px; border-radius: 8px; font-size: 13px; color: #5865f2; font-weight: 600; display: inline-block; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="icon">🎮</div>
+                <h2>Login Concluído com Sucesso!</h2>
+                <p>Sua conta do Discord foi autenticada no <strong>Dodo Screen Share</strong>.</p>
+                <div class="badge" id="statusBadge">Sincronizando com o aplicativo...</div>
+              </div>
+              <script>
+                const hash = window.location.hash.substring(1);
+                const params = new URLSearchParams(hash);
+                const token = params.get('access_token');
+                if (token) {
+                  fetch('/save-token?token=' + token)
+                    .then(() => {
+                      document.getElementById('statusBadge').textContent = '✅ Conectado! Pode fechar esta aba.';
+                      setTimeout(() => window.close(), 2000);
+                    })
+                    .catch(() => {
+                      document.getElementById('statusBadge').textContent = 'Erro ao sincronizar token.';
+                    });
+                } else {
+                  document.getElementById('statusBadge').textContent = 'Token não encontrado.';
+                }
+              </script>
+            </body>
+            </html>
+          `);
+        } else if (parsedUrl.pathname === '/save-token') {
+          const accessToken = parsedUrl.searchParams.get('token');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+
+          if (authServer) {
+            try { authServer.close(); } catch (e) {}
+            authServer = null;
+          }
+
+          if (accessToken) {
+            try {
+              const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+              });
+              const userData = await userRes.json();
+              let avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
+              if (userData.avatar) {
+                avatarUrl = `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=128`;
+              }
+              resolve({
+                success: true,
+                accessToken,
+                user: {
+                  id: userData.id,
+                  username: userData.global_name || userData.username,
+                  discriminator: userData.discriminator,
+                  avatarUrl
+                }
+              });
+            } catch (err) {
+              resolve({ success: false, error: `Falha ao obter perfil: ${err.message}` });
+            }
+          }
+        }
+      } catch (_) {}
+    });
+
+    authServer.listen(port, '127.0.0.1', () => {
+      const authUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify%20guilds%20voice`;
+      shell.openExternal(authUrl);
+    });
+
+    authServer.on('error', (err) => {
+      resolve({ success: false, error: `Erro no servidor local de autenticação: ${err.message}` });
+    });
+  });
 });
 
 // Captura Direta de Áudio Nativo em Estéreo 48kHz (L/R) via PulseAudio/PipeWire (parec)

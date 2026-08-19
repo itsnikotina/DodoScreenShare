@@ -1139,8 +1139,11 @@ function checkAuthStatus() {
 
 if (dom.btnLoginWithDiscord) {
   dom.btnLoginWithDiscord.addEventListener('click', async () => {
-    if (!window.electronAPI || !window.electronAPI.loginWithDiscord) return;
-    if (dom.authStatusMessage) dom.authStatusMessage.textContent = 'Aguardando autorização no Discord...';
+    if (!window.electronAPI || !window.electronAPI.loginWithDiscord) {
+      if (dom.authStatusMessage) dom.authStatusMessage.textContent = 'API do Electron não disponível.';
+      return;
+    }
+    if (dom.authStatusMessage) dom.authStatusMessage.textContent = '🌐 Abrindo navegador para autorizar no Discord...';
     dom.btnLoginWithDiscord.disabled = true;
 
     try {
