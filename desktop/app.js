@@ -264,6 +264,19 @@ async function handleSignalMessage(msg) {
       }
       break;
 
+    case 'force-join-room':
+      if (state.roomId !== msg.roomId) {
+        log(`Auto-Sync Mágico: Sincronizando com a Atividade na sala ${msg.roomId}...`, 'info');
+        state.roomId = msg.roomId;
+        sendSignal({
+          type: 'join-room',
+          roomId: state.roomId,
+          platform: 'desktop-host',
+          profile: state.userProfile
+        });
+      }
+      break;
+
     case 'stream-viewers-updated':
       updateViewersList(msg.viewers || [], msg.total || 0, msg.discordCount || 0);
       break;

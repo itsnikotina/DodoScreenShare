@@ -227,17 +227,36 @@ Deno.serve(async (req: Request) => {
             const userId = profile?.id || peerId;
             let targetRoomId = roomId;
 
-            // Auto-Sync Mágico: Se for o Desktop, procura onde a Activity dele está aberta!
-            if (platform === 'desktop-host' && userId) {
-              for (const [rId, r] of rooms.entries()) {
-                for (const p of r.participants.values()) {
-                  if (p.profile?.id === userId && p.platform === 'discord') {
-                    targetRoomId = rId;
-                    console.log(`Auto-Sync: Host ${userId} reconectado na sala da Activity ${rId}`);
-                    break;
+            // Auto-Sync Bidirecional Mágico:
+            if (userId) {
+              if (platform === 'desktop-host') {
+                // Se o Desktop abriu DEPOIS da Activity: Procura a sala da Activity
+                for (const [rId, r] of rooms.entries()) {
+                  for (const p of r.participants.values()) {
+                    if (p.profile?.id === userId && p.platform === 'discord') {
+                      targetRoomId = rId;
+                      console.log(`Auto-Sync (Pull): Host ${userId} se juntou à Activity na sala ${rId}`);
+                      break;
+                    }
+                  }
+                  if (targetRoomId && targetRoomId !== roomId) break;
+                }
+              } else if (platform === 'discord') {
+                // Se a Activity abriu DEPOIS do Desktop: Manda o Desktop vir para esta sala!
+                targetRoomId = targetRoomId || 'call-geral';
+                for (const [rId, r] of rooms.entries()) {
+                  for (const [pId, p] of r.participants.entries()) {
+                    if (p.profile?.id === userId && p.platform === 'desktop-host' && rId !== targetRoomId) {
+                      if (p.socket.readyState === WebSocket.OPEN) {
+                        console.log(`Auto-Sync (Push): Chamando Host ${userId} da sala ${rId} para a sala ${targetRoomId}`);
+                        p.socket.send(JSON.stringify({
+                          type: 'force-join-room',
+                          roomId: targetRoomId
+                        }));
+                      }
+                    }
                   }
                 }
-                if (targetRoomId && targetRoomId !== roomId) break;
               }
             }
 
