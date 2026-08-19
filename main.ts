@@ -199,6 +199,13 @@ function notifyHostViewers(hostId: string) {
   }
 }
 
+// Sincronização periódica contínua a cada 2.5s para garantir atualização instantânea
+setInterval(() => {
+  if (rooms.size > 0) {
+    broadcastStreamsList();
+  }
+}, 2500);
+
 // Handler Principal HTTP & WebSocket do Deno
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
@@ -216,7 +223,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // 1. Upgrade WebSocket
-  if (req.headers.get('upgrade') === 'websocket') {
+  const isWs = req.headers.get('upgrade')?.toLowerCase().includes('websocket') || req.headers.has('sec-websocket-key');
+  if (isWs) {
     const { socket, response } = Deno.upgradeWebSocket(req);
     const peerId = crypto.randomUUID().slice(0, 8);
     let currentRoomId: string | null = null;
@@ -256,7 +264,7 @@ Deno.serve(async (req: Request) => {
               participants: getParticipantsList(room)
             }));
 
-            broadcastStreamsList(targetRoomId);
+            broadcastStreamsList();
             break;
           }
 
@@ -265,7 +273,7 @@ Deno.serve(async (req: Request) => {
             const room = rooms.get(currentRoomId);
             if (!room) return;
             room.voiceParticipants = data.participants || [];
-            broadcastStreamsList(currentRoomId);
+            broadcastStreamsList();
             break;
           }
 
@@ -291,7 +299,7 @@ Deno.serve(async (req: Request) => {
               hostId: peerId
             }));
 
-            broadcastStreamsList(currentRoomId);
+            broadcastStreamsList();
             break;
           }
 
@@ -313,7 +321,7 @@ Deno.serve(async (req: Request) => {
                   }
                 }
               });
-              broadcastStreamsList(currentRoomId);
+              broadcastStreamsList();
             }
             break;
           }
