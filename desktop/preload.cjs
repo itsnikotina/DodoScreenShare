@@ -12,5 +12,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Captura e streaming nativo de áudio estéreo (parec / pw-record 48kHz L/R)
   startNativeStereoAudio: () => ipcRenderer.invoke('start-native-stereo-audio'),
   stopNativeStereoAudio: () => ipcRenderer.invoke('stop-native-stereo-audio'),
-  onNativeAudioChunk: (callback) => ipcRenderer.on('native-audio-chunk', (_event, value) => callback(value))
+  onNativeAudioChunk: (callback) => {
+    ipcRenderer.removeAllListeners('native-audio-chunk');
+    ipcRenderer.on('native-audio-chunk', (_event, value) => callback(value));
+  },
+  removeNativeAudioListeners: () => {
+    ipcRenderer.removeAllListeners('native-audio-chunk');
+  },
+
+  // Discord OAuth2
+  loginWithDiscord: () => ipcRenderer.invoke('login-with-discord')
 });
