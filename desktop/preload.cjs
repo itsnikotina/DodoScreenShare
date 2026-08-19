@@ -21,5 +21,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Discord OAuth2
-  loginWithDiscord: () => ipcRenderer.invoke('login-with-discord')
+  loginWithDiscord: () => ipcRenderer.invoke('login-with-discord'),
+  openBrowserUrl: (url) => ipcRenderer.invoke('open-browser-url', url)
 });

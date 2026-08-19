@@ -248,6 +248,22 @@ async function handleSignalMessage(msg) {
       log(`Sincronizado na sala "${msg.roomId}".`, 'success');
       break;
 
+    case 'auth-session-completed':
+      if (msg.user) {
+        state.userProfile = msg.user;
+        localStorage.setItem('dodo_desktop_user', JSON.stringify(msg.user));
+        if (msg.token) localStorage.setItem('dodo_desktop_token', msg.token);
+        checkAuthStatus();
+        log(`🎉 Bem-vindo, ${msg.user.username}! Login autenticado via Discord.`, 'success');
+        sendSignal({
+          type: 'join-room',
+          roomId: state.roomId,
+          platform: 'desktop-host',
+          profile: state.userProfile
+        });
+      }
+      break;
+
     case 'stream-viewers-updated':
       updateViewersList(msg.viewers || [], msg.total || 0, msg.discordCount || 0);
       break;
@@ -1139,36 +1155,39 @@ function checkAuthStatus() {
 
 if (dom.btnLoginWithDiscord) {
   dom.btnLoginWithDiscord.addEventListener('click', async () => {
-    if (!window.electronAPI || !window.electronAPI.loginWithDiscord) {
-      if (dom.authStatusMessage) dom.authStatusMessage.textContent = 'API do Electron não disponível.';
-      return;
-    }
     if (dom.authStatusMessage) dom.authStatusMessage.textContent = '🌐 Abrindo navegador para autorizar no Discord...';
-    dom.btnLoginWithDiscord.disabled = true;
 
-    try {
-      const res = await window.electronAPI.loginWithDiscord();
-      if (res && res.success && res.user) {
-        state.userProfile = res.user;
-        localStorage.setItem('dodo_desktop_user', JSON.stringify(res.user));
-        localStorage.setItem('dodo_desktop_token', res.accessToken);
-        checkAuthStatus();
-        log(`🎉 Bem-vindo, ${res.user.username}! Login realizado com sucesso.`, 'success');
-        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-          sendSignal({
-            type: 'join-room',
-            roomId: state.roomId,
-            platform: 'desktop-host',
-            profile: state.userProfile
-          });
+    const authId = 'auth_' + Math.random().toString(36).slice(2, 10);
+    sendSignal({ type: 'register-auth-session', authId });
+
+    const CLIENT_ID = '787371101177118750';
+    const REDIRECT_URI = 'https://dodoscreenshare.itsnikotina.deno.net/';
+    const authUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify%20guilds%20voice&state=${authId}`;
+
+    if (window.electronAPI && window.electronAPI.openBrowserUrl) {
+      window.electronAPI.openBrowserUrl(authUrl);
+    } else {
+      window.open(authUrl, '_blank');
+    }
+
+    if (window.electronAPI && window.electronAPI.loginWithDiscord) {
+      window.electronAPI.loginWithDiscord().then((res) => {
+        if (res && res.success && res.user) {
+          state.userProfile = res.user;
+          localStorage.setItem('dodo_desktop_user', JSON.stringify(res.user));
+          if (res.accessToken) localStorage.setItem('dodo_desktop_token', res.accessToken);
+          checkAuthStatus();
+          log(`🎉 Bem-vindo, ${res.user.username}! Login realizado com sucesso.`, 'success');
+          if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            sendSignal({
+              type: 'join-room',
+              roomId: state.roomId,
+              platform: 'desktop-host',
+              profile: state.userProfile
+            });
+          }
         }
-      } else {
-        if (dom.authStatusMessage) dom.authStatusMessage.textContent = res.error || 'Login cancelado.';
-      }
-    } catch (e) {
-      if (dom.authStatusMessage) dom.authStatusMessage.textContent = `Erro: ${e.message}`;
-    } finally {
-      dom.btnLoginWithDiscord.disabled = false;
+      }).catch(() => {});
     }
   });
 }

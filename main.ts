@@ -26,6 +26,7 @@ interface Room {
 }
 
 const rooms = new Map<string, Room>();
+const pendingAuthSessions = new Map<string, WebSocket>();
 
 function getOrCreateRoom(roomId: string): Room {
   let room = rooms.get(roomId);
@@ -251,6 +252,28 @@ Deno.serve(async (req: Request) => {
             }));
 
             broadcastStreamsList();
+            break;
+          }
+
+          case 'register-auth-session': {
+            if (data.authId) {
+              pendingAuthSessions.set(data.authId, socket);
+            }
+            break;
+          }
+
+          case 'complete-auth-session': {
+            if (data.authId && pendingAuthSessions.has(data.authId)) {
+              const targetSocket = pendingAuthSessions.get(data.authId);
+              if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
+                targetSocket.send(JSON.stringify({
+                  type: 'auth-session-completed',
+                  user: data.user,
+                  token: data.token
+                }));
+              }
+              pendingAuthSessions.delete(data.authId);
+            }
             break;
           }
 

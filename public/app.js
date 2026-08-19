@@ -520,8 +520,10 @@ async function initDiscordAuth() {
     try {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
+      const authId = hashParams.get('state') || new URLSearchParams(window.location.search).get('state') || new URLSearchParams(window.location.search).get('auth_id');
+
       if (accessToken) {
-        // Envia o token para o app Desktop local se estiver aguardando login
+        // Envia o token para o app Desktop local caso o HTTP direto responda
         fetch(`http://127.0.0.1:48291/save-token?token=${encodeURIComponent(accessToken)}`, { mode: 'cors' }).catch(() => {});
 
         log('Autenticando perfil com Discord...', 'info');
@@ -544,6 +546,16 @@ async function initDiscordAuth() {
           localStorage.setItem('discord_user', JSON.stringify(profile));
           state.userProfile = profile;
           log(`Usuário autenticado com sucesso: ${profile.username}`, 'success');
+
+          // Relaya instantaneamente para o Desktop via WebSocket
+          if (authId) {
+            sendSignal({
+              type: 'complete-auth-session',
+              authId: authId,
+              token: accessToken,
+              user: profile
+            });
+          }
 
           const cleanUrl = window.location.origin + window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);

@@ -128,6 +128,11 @@ ipcMain.handle('reload-app', () => {
   return true;
 });
 
+ipcMain.handle('open-browser-url', (_event, url) => {
+  if (url) shell.openExternal(url);
+  return true;
+});
+
 // Autenticação Oficial Discord via Navegador Padrão + Callback Local
 let authServer = null;
 
