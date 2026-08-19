@@ -586,7 +586,7 @@ async function initDiscordAuth() {
   } else {
     if (dom.btnDiscordLogin) {
       dom.btnDiscordLogin.classList.remove('hidden');
-      const originUrl = window.location.origin.includes('discordsays.com') ? 'https://dodoscreenshare.onrender.com/' : `${window.location.origin}/`;
+      const originUrl = state.serverPublicUrl || 'https://dodoscreenshare.itsnikotina.deno.net/';
       const redirectUri = encodeURIComponent(originUrl);
       dom.btnDiscordLogin.href = `https://discord.com/oauth2/authorize?client_id=787371101177118750&response_type=token&redirect_uri=${redirectUri}&scope=identify`;
     }
@@ -2278,7 +2278,7 @@ function getPublicPanelUrl() {
   if (!window.location.origin.includes('discordsays.com') && !window.location.origin.includes('localhost')) {
     return `${window.location.origin}/`;
   }
-  return 'https://dodoscreenshare.onrender.com/';
+  return 'https://dodoscreenshare.itsnikotina.deno.net/';
 }
 
 // Busca a URL dinâmica do servidor imediatamente

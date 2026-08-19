@@ -18,7 +18,7 @@ const RTC_CONFIG = {
 const PeerConnectionClass = window.RTCPeerConnection || window.webkitRTCPeerConnection || null;
 
 const state = {
-  serverUrl: localStorage.getItem('dodo_desktop_server_url') || 'http://localhost:3000',
+  serverUrl: localStorage.getItem('dodo_desktop_server_url') || 'https://dodoscreenshare.itsnikotina.deno.net',
   ws: null,
   peerId: null,
   roomId: localStorage.getItem('dodo_desktop_room_id') || 'call-geral',
