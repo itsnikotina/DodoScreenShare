@@ -682,37 +682,28 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
   }
 }
 
-// Anti-Lag Video Frame Streamer
+// Snapshot & WebRTC Streamer (Sem saturação de WebSocket, 100% focado em WebRTC UDP de baixa latência)
 function startAntiLagStreamer(stream, targetFps = 30) {
   if (state.antiLagInterval) clearInterval(state.antiLagInterval);
 
   state.captureCanvas = dom.liveCanvasPreview;
   state.captureCtx = state.captureCanvas.getContext('2d', { alpha: false });
 
-  const intervalMs = Math.round(1000 / targetFps);
-
-  state.antiLagInterval = setInterval(() => {
+  // Envia apenas um snapshot inicial de alta velocidade para preview instantâneo no Discord
+  setTimeout(() => {
     if (!state.isHosting || !dom.liveVideoPreview || dom.liveVideoPreview.readyState < 2) return;
-
-    const w = dom.liveVideoPreview.videoWidth;
-    const h = dom.liveVideoPreview.videoHeight;
-    if (!w || !h) return;
-
-    if (state.captureCanvas.width !== w || state.captureCanvas.height !== h) {
-      state.captureCanvas.width = w;
-      state.captureCanvas.height = h;
-    }
-
-    state.captureCtx.drawImage(dom.liveVideoPreview, 0, 0, w, h);
-    const frameData = state.captureCanvas.toDataURL('image/jpeg', 0.65);
-
-    sendSignal({
-      type: 'stream-frame',
-      frame: frameData
-    });
-
-    state.fpsSentCount++;
-  }, intervalMs);
+    try {
+      const w = dom.liveVideoPreview.videoWidth;
+      const h = dom.liveVideoPreview.videoHeight;
+      if (w && h) {
+        state.captureCanvas.width = w;
+        state.captureCanvas.height = h;
+        state.captureCtx.drawImage(dom.liveVideoPreview, 0, 0, w, h);
+        const frameData = state.captureCanvas.toDataURL('image/jpeg', 0.6);
+        sendSignal({ type: 'stream-frame', frame: frameData });
+      }
+    } catch (e) {}
+  }, 300);
 }
 
 // Audio Streamer via ScriptProcessor (Stereo Hi-Fi 48kHz, 2 canais L + R com Volume 1:1 Original)
