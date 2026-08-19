@@ -22,6 +22,7 @@ const state = {
   ws: null,
   peerId: null,
   roomId: localStorage.getItem('dodo_desktop_room_id') || 'call-geral',
+  userProfile: JSON.parse(localStorage.getItem('dodo_desktop_user') || 'null'),
   isHosting: false,
   selectedSourceId: null,
   selectedSourceType: 'screens',
@@ -51,6 +52,15 @@ const dom = {
   btnOpenDiscordActivity: document.getElementById('btnOpenDiscordActivity'),
   btnCheckUpdates: document.getElementById('btnCheckUpdates'),
   btnCheckUpdatesText: document.getElementById('btnCheckUpdatesText'),
+
+  // Auth DOM
+  modalDiscordAuth: document.getElementById('modalDiscordAuth'),
+  btnLoginWithDiscord: document.getElementById('btnLoginWithDiscord'),
+  authStatusMessage: document.getElementById('authStatusMessage'),
+  userProfileHeader: document.getElementById('userProfileHeader'),
+  userAvatarImg: document.getElementById('userAvatarImg'),
+  userNameText: document.getElementById('userNameText'),
+  btnLogoutDiscord: document.getElementById('btnLogoutDiscord'),
 
   btnOpenSourcePicker: document.getElementById('btnOpenSourcePicker'),
   btnStopStream: document.getElementById('btnStopStream'),
@@ -171,7 +181,7 @@ function initWebSocket() {
       type: 'join-room',
       roomId: state.roomId,
       platform: 'desktop-host',
-      profile: {
+      profile: state.userProfile || {
         username: 'Host Desktop',
         avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
       }
@@ -182,7 +192,7 @@ function initWebSocket() {
       log('🔄 Sincronizando transmissão ativa no servidor...', 'info');
       sendSignal({
         type: 'start-stream',
-        profile: {
+        profile: state.userProfile || {
           username: 'Host Desktop',
           avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
         }
@@ -502,7 +512,7 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
           log(`❌ Exceção ao chamar startNativeStereoAudio: ${e.message}`, 'error');
         }
       } else {
-        log('⚠️ window.electronAPI.startNativeStereoAudio NÃO encontrado no renderer!', 'warn');
+        log('⚠��� window.electronAPI.startNativeStereoAudio NÃO encontrado no renderer!', 'warn');
       }
 
       const isNativeOk = nativeStereoResult === true || (nativeStereoResult && nativeStereoResult.success);
@@ -665,7 +675,7 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     if (state.ws && state.ws.readyState === WebSocket.OPEN) {
       sendSignal({
         type: 'start-stream',
-        profile: {
+        profile: state.userProfile || {
           username: 'Host Desktop',
           avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
         }
@@ -1112,7 +1122,66 @@ if (btnTestStereo) {
   });
 }
 
+// Gerenciador de Autenticação Discord
+function checkAuthStatus() {
+  if (state.userProfile && state.userProfile.id) {
+    if (dom.modalDiscordAuth) dom.modalDiscordAuth.classList.add('hidden');
+    if (dom.userProfileHeader) {
+      dom.userProfileHeader.classList.remove('hidden');
+      if (dom.userAvatarImg) dom.userAvatarImg.src = state.userProfile.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
+      if (dom.userNameText) dom.userNameText.textContent = state.userProfile.username || 'Usuário';
+    }
+  } else {
+    if (dom.modalDiscordAuth) dom.modalDiscordAuth.classList.remove('hidden');
+    if (dom.userProfileHeader) dom.userProfileHeader.classList.add('hidden');
+  }
+}
+
+if (dom.btnLoginWithDiscord) {
+  dom.btnLoginWithDiscord.addEventListener('click', async () => {
+    if (!window.electronAPI || !window.electronAPI.loginWithDiscord) return;
+    if (dom.authStatusMessage) dom.authStatusMessage.textContent = 'Aguardando autorização no Discord...';
+    dom.btnLoginWithDiscord.disabled = true;
+
+    try {
+      const res = await window.electronAPI.loginWithDiscord();
+      if (res && res.success && res.user) {
+        state.userProfile = res.user;
+        localStorage.setItem('dodo_desktop_user', JSON.stringify(res.user));
+        localStorage.setItem('dodo_desktop_token', res.accessToken);
+        checkAuthStatus();
+        log(`🎉 Bem-vindo, ${res.user.username}! Login realizado com sucesso.`, 'success');
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          sendSignal({
+            type: 'join-room',
+            roomId: state.roomId,
+            platform: 'desktop-host',
+            profile: state.userProfile
+          });
+        }
+      } else {
+        if (dom.authStatusMessage) dom.authStatusMessage.textContent = res.error || 'Login cancelado.';
+      }
+    } catch (e) {
+      if (dom.authStatusMessage) dom.authStatusMessage.textContent = `Erro: ${e.message}`;
+    } finally {
+      dom.btnLoginWithDiscord.disabled = false;
+    }
+  });
+}
+
+if (dom.btnLogoutDiscord) {
+  dom.btnLogoutDiscord.addEventListener('click', () => {
+    state.userProfile = null;
+    localStorage.removeItem('dodo_desktop_user');
+    localStorage.removeItem('dodo_desktop_token');
+    checkAuthStatus();
+    log('Você saiu da sua conta do Discord.', 'info');
+  });
+}
+
 // Inicialização
 dom.serverUrlInput.value = state.serverUrl;
+checkAuthStatus();
 initWebSocket();
 startFpsMonitor();
