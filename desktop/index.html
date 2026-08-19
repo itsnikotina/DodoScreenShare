@@ -298,6 +298,26 @@
     </div>
   </div>
 
-  <script src="app.js?v=2.3.0"></script>
+  <!-- Modal de Login Obrigatório do Discord -->
+  <div class="modal-overlay hidden" id="modalDiscordAuth">
+    <div class="modal-card" style="max-width: 440px; text-align: center; padding: 36px 28px; border: 1px solid rgba(88, 101, 242, 0.3); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);">
+      <div style="width: 72px; height: 72px; margin: 0 auto 18px; background: rgba(88, 101, 242, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #5865f2;">
+        <iconify-icon icon="ic:baseline-discord" width="42" style="color: #5865f2;"></iconify-icon>
+      </div>
+      <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 10px; color: #fff;">Conecte seu Discord</h2>
+      <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 26px; line-height: 1.55;">
+        Faça login com a sua conta do Discord para que o Dodo Screen Share sincronize automaticamente com as suas chamadas de voz e transmita sua tela com máxima qualidade.
+      </p>
+
+      <button id="btnLoginWithDiscord" class="btn btn-primary btn-lg" style="width: 100%; justify-content: center; font-size: 1rem; font-weight: 600; padding: 13px 20px; background-color: #5865f2; border-color: #5865f2; box-shadow: 0 4px 14px rgba(88, 101, 242, 0.4); cursor: pointer;">
+        <iconify-icon icon="ic:baseline-discord" width="24"></iconify-icon>
+        <span>Entrar com o Discord</span>
+      </button>
+
+      <div id="authStatusMessage" style="margin-top: 16px; font-size: 0.82rem; color: var(--text-secondary); min-height: 20px;"></div>
+    </div>
+  </div>
+
+  <script src="app.js?v=2.4.0"></script>
 </body>
 </html>
