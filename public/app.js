@@ -823,18 +823,6 @@ function updateAvailableStreams(streams, participants = []) {
     state.callParticipants = participants;
   }
 
-  // No navegador externo (Web Panel), o site opera exclusivamente como Painel de Envio do Host.
-  // Nunca assiste nem renderiza transmissões de outros usuários na tela do Host.
-  if (!isInsideDiscordActivity()) {
-    if (dom.callGalleryShelf) dom.callGalleryShelf.style.display = 'none';
-    if (!state.isHosting) {
-      dom.videoPlaceholder.classList.remove('hidden');
-      dom.placeholderText.textContent = 'Painel de Transmissão do Host';
-      dom.placeholderTip.textContent = 'Clique em "Compartilhar Minha Tela" para transmitir. Os membros da call assistirão pela Atividade do Discord!';
-    }
-    return;
-  }
-
   // Verifica se o stream que estávamos assistindo ainda existe
   const currentStreamExists = streams.some(s => s.hostId === state.watchingHostId);
   if (!currentStreamExists) {
@@ -922,7 +910,7 @@ function updateAvailableStreams(streams, participants = []) {
   }
 
   // Auto-seleciona na entrada se o usuário não optou por sair
-  if (!state.isHosting && streams.length > 0 && isInsideDiscordActivity() && !state.userStoppedWatching) {
+  if (!state.isHosting && streams.length > 0 && !state.userStoppedWatching) {
     if (!state.watchingHostId || !streams.some(s => s.hostId === state.watchingHostId)) {
       selectStream(streams[0].hostId, true);
     }
@@ -930,7 +918,6 @@ function updateAvailableStreams(streams, participants = []) {
 }
 
 function selectStream(hostId, force = false) {
-  if (!isInsideDiscordActivity()) return; // No navegador web externo (Host), nunca assiste streams de terceiros
   state.userStoppedWatching = false;
   ensureViewerAudioContext();
 
