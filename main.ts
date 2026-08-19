@@ -50,8 +50,12 @@ function cleanEmptyRoom(roomId: string) {
 
 function getStreamsList(room: Room) {
   const list: any[] = [];
+  const seen = new Set<string>();
+
+  // 1. Transmissões ativas dentro desta chamada
   if (room && room.hosts) {
     room.hosts.forEach((host, hostId) => {
+      seen.add(hostId);
       list.push({
         hostId: hostId,
         profile: host.profile || { username: 'Host ' + hostId, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
@@ -59,6 +63,22 @@ function getStreamsList(room: Room) {
       });
     });
   }
+
+  // 2. Auto-Bridge: Se o Host estiver na sala padrão (call-geral), disponibiliza automaticamente para os membros da chamada do Discord
+  const generalRoom = rooms.get('call-geral');
+  if (generalRoom && generalRoom !== room && generalRoom.hosts) {
+    generalRoom.hosts.forEach((host, hostId) => {
+      if (!seen.has(hostId)) {
+        seen.add(hostId);
+        list.push({
+          hostId: hostId,
+          profile: host.profile || { username: 'Host ' + hostId, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
+          viewersCount: host.viewers.size
+        });
+      }
+    });
+  }
+
   return list;
 }
 
@@ -130,6 +150,14 @@ function broadcastStreamsList(specificRoomId: string | null = null) {
   rooms.forEach((r) => {
     broadcastToSingleRoom(r);
   });
+}
+
+function findSocketById(id: string): WebSocket | null {
+  for (const r of rooms.values()) {
+    if (r.hosts.has(id)) return r.hosts.get(id)!.socket;
+    if (r.participants.has(id)) return r.participants.get(id)!.socket;
+  }
+  return null;
 }
 
 function notifyHostViewers(hostId: string) {
@@ -291,105 +319,95 @@ Deno.serve(async (req: Request) => {
           }
 
           case 'watch-stream': {
-            if (!currentRoomId || !hostId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-
-            const participant = room.participants.get(peerId);
-            if (participant) {
-              participant.watchingHostId = hostId;
+            if (!hostId) return;
+            for (const r of rooms.values()) {
+              if (r.hosts.has(hostId)) {
+                const host = r.hosts.get(hostId)!;
+                host.viewers.add(peerId);
+                if (host.socket.readyState === WebSocket.OPEN) {
+                  host.socket.send(JSON.stringify({
+                    type: 'new-viewer',
+                    viewerId: peerId,
+                    platform: platform || 'discord'
+                  }));
+                }
+              }
             }
 
-            const host = room.hosts.get(hostId);
-            if (host) {
-              host.viewers.add(peerId);
-              if (host.socket.readyState === WebSocket.OPEN) {
-                host.socket.send(JSON.stringify({
-                  type: 'new-viewer',
-                  viewerId: peerId,
-                  platform: participant?.platform || 'web'
-                }));
+            if (currentRoomId) {
+              const room = rooms.get(currentRoomId);
+              if (room) {
+                const participant = room.participants.get(peerId);
+                if (participant) participant.watchingHostId = hostId;
               }
             }
 
             notifyHostViewers(hostId);
-            broadcastStreamsList(currentRoomId);
+            broadcastStreamsList();
             break;
           }
 
           case 'leave-stream': {
-            if (!currentRoomId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-
-            const p = room.participants.get(peerId);
-            if (p && p.watchingHostId) {
-              const prev = p.watchingHostId;
-              p.watchingHostId = null;
-              notifyHostViewers(prev);
+            for (const r of rooms.values()) {
+              const p = r.participants.get(peerId);
+              if (p && p.watchingHostId) {
+                const prev = p.watchingHostId;
+                p.watchingHostId = null;
+                notifyHostViewers(prev);
+              }
+              r.hosts.forEach((h) => h.viewers.delete(peerId));
             }
-            room.hosts.forEach((h) => h.viewers.delete(peerId));
-            broadcastStreamsList(currentRoomId);
+            broadcastStreamsList();
             break;
           }
 
           case 'stream-frame': {
-            if (!currentRoomId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-
             const payload = JSON.stringify({ type: 'stream-frame', hostId: peerId, frame });
-            room.participants.forEach((p) => {
-              if (p.watchingHostId === peerId && p.socket.readyState === WebSocket.OPEN) {
-                p.socket.send(payload);
-              }
+            rooms.forEach((r) => {
+              r.participants.forEach((p) => {
+                if (p.watchingHostId === peerId && p.socket.readyState === WebSocket.OPEN) {
+                  p.socket.send(payload);
+                }
+              });
             });
             break;
           }
 
           case 'stream-audio': {
-            if (!currentRoomId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-
             const payload = JSON.stringify({ type: 'stream-audio', hostId: peerId, audio });
-            room.participants.forEach((p) => {
-              if (p.watchingHostId === peerId && p.socket.readyState === WebSocket.OPEN) {
-                p.socket.send(payload);
-              }
+            rooms.forEach((r) => {
+              r.participants.forEach((p) => {
+                if (p.watchingHostId === peerId && p.socket.readyState === WebSocket.OPEN) {
+                  p.socket.send(payload);
+                }
+              });
             });
             break;
           }
 
           case 'offer': {
-            if (!targetId || !currentRoomId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-            const target = room.participants.get(targetId);
-            if (target && target.socket.readyState === WebSocket.OPEN) {
-              target.socket.send(JSON.stringify({ type: 'offer', from: peerId, sdp }));
+            if (!targetId) return;
+            const targetSocket = findSocketById(targetId);
+            if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
+              targetSocket.send(JSON.stringify({ type: 'offer', from: peerId, sdp }));
             }
             break;
           }
 
           case 'answer': {
-            if (!targetId || !currentRoomId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-            const target = room.hosts.get(targetId) || room.participants.get(targetId);
-            if (target && target.socket.readyState === WebSocket.OPEN) {
-              target.socket.send(JSON.stringify({ type: 'answer', from: peerId, sdp }));
+            if (!targetId) return;
+            const targetSocket = findSocketById(targetId);
+            if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
+              targetSocket.send(JSON.stringify({ type: 'answer', from: peerId, sdp }));
             }
             break;
           }
 
           case 'ice-candidate': {
-            if (!targetId || !currentRoomId) return;
-            const room = rooms.get(currentRoomId);
-            if (!room) return;
-            const target = room.participants.get(targetId) || room.hosts.get(targetId);
-            if (target && target.socket.readyState === WebSocket.OPEN) {
-              target.socket.send(JSON.stringify({ type: 'ice-candidate', from: peerId, candidate }));
+            if (!targetId) return;
+            const targetSocket = findSocketById(targetId);
+            if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
+              targetSocket.send(JSON.stringify({ type: 'ice-candidate', from: peerId, candidate }));
             }
             break;
           }
