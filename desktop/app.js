@@ -637,8 +637,21 @@ async function startNativeScreenSharing(sourceId, resolution = '720p', fps = 30,
     dom.btnStopStream.disabled = false;
     dom.btnChangeSource.classList.remove('hidden');
 
+    const videoTrack = stream.getVideoTracks()[0];
+    const trackSettings = videoTrack ? videoTrack.getSettings() : {};
+    const displayW = trackSettings.width || 'Auto';
+    const displayH = trackSettings.height || maxH;
+
     dom.statRole.textContent = 'HOST (Ao Vivo)';
-    dom.statResolution.textContent = `${maxW}x${maxH}`;
+    dom.statResolution.textContent = `${displayW}x${displayH}`;
+
+    dom.liveVideoPreview.onloadedmetadata = () => {
+      const w = dom.liveVideoPreview.videoWidth;
+      const h = dom.liveVideoPreview.videoHeight;
+      if (w && h) {
+        dom.statResolution.textContent = `${w}x${h}`;
+      }
+    };
 
     // Listeners para encerramento de faixas
     stream.getTracks().forEach((track) => {
