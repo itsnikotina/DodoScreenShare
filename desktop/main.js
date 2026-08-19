@@ -140,10 +140,20 @@ ipcMain.handle('login-with-discord', async () => {
 
     const port = 48291;
     const CLIENT_ID = '787371101177118750';
-    const REDIRECT_URI = `http://127.0.0.1:${port}/callback`;
+    const REDIRECT_URI = 'https://dodoscreenshare.itsnikotina.deno.net/';
 
     authServer = http.createServer(async (req, res) => {
       try {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
         const parsedUrl = new URL(req.url, `http://127.0.0.1:${port}`);
         
         if (parsedUrl.pathname === '/callback') {

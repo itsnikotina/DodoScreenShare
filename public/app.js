@@ -521,6 +521,9 @@ async function initDiscordAuth() {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       if (accessToken) {
+        // Envia o token para o app Desktop local se estiver aguardando login
+        fetch(`http://127.0.0.1:48291/save-token?token=${encodeURIComponent(accessToken)}`, { mode: 'cors' }).catch(() => {});
+
         log('Autenticando perfil com Discord...', 'info');
         const res = await fetch('https://discord.com/api/v10/users/@me', {
           headers: {
