@@ -703,7 +703,45 @@ async function handleSignalMessage(msg) {
       break;
 
     case 'stream-started':
-      log('Sua transmissão está ativa no canal!', 'success');
+      break;
+
+    case 'become-relay-for': {
+      // Recebido por um Viewer quando o servidor o promove a Repetidor (Relay Node)
+      const targetViewerId = msg.viewerId;
+      if (!state.remoteStream) return;
+      log(`[Topologia P2P] Atuando como Repetidor (Relay) para o novo espectador ${targetViewerId}...`, 'info');
+      
+      try {
+        const pc = new PeerConnectionClass(RTC_CONFIG);
+        state.hostPeerConnections.set(targetViewerId, pc); // Reaproveitamos a coleção de peers
+
+        state.remoteStream.getTracks().forEach((track) => pc.addTrack(track, state.remoteStream));
+
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendSignal({
+              type: 'ice-candidate',
+              candidate: event.candidate,
+              targetId: targetViewerId
+            });
+          }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        sendSignal({
+          type: 'offer',
+          sdp: pc.localDescription,
+          targetId: targetViewerId
+        });
+      } catch (err) {
+        console.error('Erro ao atuar como relay:', err);
+      }
+      break;
+    }
+
+    case 'host-stopped-stream':
       break;
 
     // Confirmação de que começamos a assistir um stream específico
@@ -1699,8 +1737,38 @@ function playIncomingAudioChunk(audioPayload) {
 }
 
 // ==========================================
-// WebRTC Suporte
+// WebRTC Suporte e Sentinel Anti-Lag
 // ==========================================
+let antiLagInterval = null;
+
+function startAntiLagSentinel() {
+  if (antiLagInterval) clearInterval(antiLagInterval);
+  antiLagInterval = setInterval(() => {
+    if (!dom.preview || dom.preview.paused || !dom.preview.buffered.length) return;
+
+    const currentTime = dom.preview.currentTime;
+    const bufferedEnd = dom.preview.buffered.end(dom.preview.buffered.length - 1);
+    const delay = bufferedEnd - currentTime;
+
+    if (delay > 0.6) {
+      // Atraso pesado (> 600ms): Pula direto pro tempo atual
+      dom.preview.currentTime = bufferedEnd;
+      dom.preview.playbackRate = 1.0;
+      console.log(`[Anti-Lag] Pulo aplicado (Atraso: ${delay.toFixed(2)}s)`);
+    } else if (delay > 0.15) {
+      // Atraso leve (> 150ms): Acelera o vídeo imperceptivelmente
+      dom.preview.playbackRate = 1.15;
+    } else {
+      // Sincronizado
+      dom.preview.playbackRate = 1.0;
+    }
+  }, 1000);
+}
+
+function stopAntiLagSentinel() {
+  if (antiLagInterval) clearInterval(antiLagInterval);
+  if (dom.preview) dom.preview.playbackRate = 1.0;
+}
 async function createOfferForViewer(viewerId) {
   if (!PeerConnectionClass) return;
   try {
@@ -1755,7 +1823,9 @@ async function handleOfferAndCreateAnswer(sdp, hostId) {
     pc.ontrack = (event) => {
       if (event.track) {
         state.remoteStream.addTrack(event.track);
-        dom.preview.play().catch(() => {});
+        dom.preview.play().then(() => {
+          startAntiLagSentinel();
+        }).catch(() => {});
         if (dom.preview.videoWidth && dom.preview.videoHeight && dom.videoWrapper) {
           dom.videoWrapper.style.aspectRatio = `${dom.preview.videoWidth} / ${dom.preview.videoHeight}`;
         }
@@ -1969,6 +2039,8 @@ function stopSharing() {
 }
 
 function cleanupViewerMedia() {
+  stopAntiLagSentinel();
+
   if (state.viewerPeerConnection) {
     state.viewerPeerConnection.close();
     state.viewerPeerConnection = null;

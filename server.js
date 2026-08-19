@@ -492,7 +492,24 @@ wss.on('connection', (ws, req) => {
 
       // 1. Entrar no Canal / Sala de Voz
       case 'join-room': {
-        let targetRoomId = roomId || 'call-geral';
+        const userId = profile?.id || peerId;
+        let targetRoomId = roomId;
+
+        // Auto-Sync Mágico: Se for o Desktop, procura onde a Activity dele está aberta!
+        if (platform === 'desktop-host' && userId) {
+          for (const [rId, r] of rooms.entries()) {
+            for (const p of r.participants.values()) {
+              if (p.profile?.id === userId && p.platform === 'discord') {
+                targetRoomId = rId;
+                console.log(`Auto-Sync: Host ${userId} reconectado na sala da Activity ${rId}`);
+                break;
+              }
+            }
+            if (targetRoomId && targetRoomId !== roomId) break;
+          }
+        }
+
+        targetRoomId = targetRoomId || 'call-geral';
         ws.roomId = targetRoomId;
         ws.platform = platform || 'web';
 
@@ -617,27 +634,45 @@ wss.on('connection', (ws, req) => {
           });
 
           participant.watchingHostId = hostId;
-          targetHost.viewers.add(peerId);
+        if (!hostId) return;
+        for (const r of rooms.values()) {
+          if (r.hosts.has(hostId)) {
+            const host = r.hosts.get(hostId);
+            host.viewers.add(peerId);
 
-          console.log(`[Watch] 👁️ ${participant.profile?.username || peerId} [${participant.platform}] assistindo ${targetHost.profile?.username || hostId}`);
-
-          ws.send(JSON.stringify({
-            type: 'watching-stream-confirmed',
-            hostId: hostId,
-            profile: targetHost.profile
-          }));
-
-          notifyHostViewers(null, hostId);
-
-          if (targetHost.ws.readyState === WebSocket.OPEN) {
-            targetHost.ws.send(JSON.stringify({
-              type: 'new-viewer',
-              viewerId: peerId,
-              platform: participant.platform
-            }));
+            // Topologia Híbrida: Mesh (<4) vs Árvore/Relay (>4)
+            const MAX_DIRECT = 4;
+            if (host.viewers.size <= MAX_DIRECT) {
+              if (host.ws.readyState === WebSocket.OPEN) {
+                host.ws.send(JSON.stringify({
+                  type: 'new-viewer',
+                  viewerId: peerId,
+                  platform: platform || 'discord'
+                }));
+              }
+            } else {
+              const relays = Array.from(host.viewers);
+              let relayAssigned = false;
+              for (let i = 0; i < relays.length; i++) {
+                const relayId = relays[i];
+                if (relayId === peerId) continue;
+                const relayParticipant = r.participants.get(relayId);
+                if (relayParticipant && relayParticipant.ws.readyState === WebSocket.OPEN) {
+                  console.log(`[Topologia] Redirecionando viewer ${peerId} para o relay ${relayId}`);
+                  relayParticipant.ws.send(JSON.stringify({
+                    type: 'become-relay-for',
+                    viewerId: peerId
+                  }));
+                  relayAssigned = true;
+                  break;
+                }
+              }
+              if (!relayAssigned && host.ws.readyState === WebSocket.OPEN) {
+                host.ws.send(JSON.stringify({ type: 'new-viewer', viewerId: peerId, platform: platform || 'discord' }));
+              }
+            }
           }
-        }
-        break;
+        }break;
       }
 
       // 5. Parar de Assistir um Stream (Viewer)

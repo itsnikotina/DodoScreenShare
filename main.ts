@@ -224,7 +224,24 @@ Deno.serve(async (req: Request) => {
 
         switch (type) {
           case 'join-room': {
-            const targetRoomId = roomId || 'call-geral';
+            const userId = profile?.id || peerId;
+            let targetRoomId = roomId;
+
+            // Auto-Sync Mágico: Se for o Desktop, procura onde a Activity dele está aberta!
+            if (platform === 'desktop-host' && userId) {
+              for (const [rId, r] of rooms.entries()) {
+                for (const p of r.participants.values()) {
+                  if (p.profile?.id === userId && p.platform === 'discord') {
+                    targetRoomId = rId;
+                    console.log(`Auto-Sync: Host ${userId} reconectado na sala da Activity ${rId}`);
+                    break;
+                  }
+                }
+                if (targetRoomId && targetRoomId !== roomId) break;
+              }
+            }
+
+            targetRoomId = targetRoomId || 'call-geral';
             currentRoomId = targetRoomId;
 
             const room = getOrCreateRoom(targetRoomId);
@@ -334,12 +351,40 @@ Deno.serve(async (req: Request) => {
               if (r.hosts.has(hostId)) {
                 const host = r.hosts.get(hostId)!;
                 host.viewers.add(peerId);
-                if (host.socket.readyState === WebSocket.OPEN) {
-                  host.socket.send(JSON.stringify({
-                    type: 'new-viewer',
-                    viewerId: peerId,
-                    platform: platform || 'discord'
-                  }));
+
+                // Topologia Híbrida: Mesh (<4) vs Árvore/Relay (>4)
+                const MAX_DIRECT = 4;
+                if (host.viewers.size <= MAX_DIRECT) {
+                  if (host.socket.readyState === WebSocket.OPEN) {
+                    host.socket.send(JSON.stringify({
+                      type: 'new-viewer',
+                      viewerId: peerId,
+                      platform: platform || 'discord'
+                    }));
+                  }
+                } else {
+                  // Seleciona o primeiro viewer que já está conectado para atuar como Relay (Repetidor)
+                  const relays = Array.from(host.viewers);
+                  let relayAssigned = false;
+                  for (let i = 0; i < relays.length; i++) {
+                    const relayId = relays[i];
+                    if (relayId === peerId) continue;
+                    const relayParticipant = r.participants.get(relayId);
+                    if (relayParticipant && relayParticipant.socket.readyState === WebSocket.OPEN) {
+                      console.log(`[Topologia] Redirecionando viewer ${peerId} para o relay ${relayId}`);
+                      relayParticipant.socket.send(JSON.stringify({
+                        type: 'become-relay-for',
+                        viewerId: peerId
+                      }));
+                      relayAssigned = true;
+                      break;
+                    }
+                  }
+                  
+                  // Fallback se não achar relay: envia direto pro host
+                  if (!relayAssigned && host.socket.readyState === WebSocket.OPEN) {
+                    host.socket.send(JSON.stringify({ type: 'new-viewer', viewerId: peerId, platform: platform || 'discord' }));
+                  }
                 }
               }
             }
