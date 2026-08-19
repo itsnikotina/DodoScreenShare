@@ -48,26 +48,12 @@ function cleanEmptyRoom(roomId: string) {
   }
 }
 
-function getStreamsList(room: Room) {
+function getStreamsList(room: Room | null = null) {
   const list: any[] = [];
   const seen = new Set<string>();
 
-  // 1. Transmissões ativas dentro desta chamada
-  if (room && room.hosts) {
-    room.hosts.forEach((host, hostId) => {
-      seen.add(hostId);
-      list.push({
-        hostId: hostId,
-        profile: host.profile || { username: 'Host ' + hostId, avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png' },
-        viewersCount: host.viewers.size
-      });
-    });
-  }
-
-  // 2. Auto-Bridge: Se o Host estiver na sala padrão (call-geral), disponibiliza automaticamente para os membros da chamada do Discord
-  const generalRoom = rooms.get('call-geral');
-  if (generalRoom && generalRoom !== room && generalRoom.hosts) {
-    generalRoom.hosts.forEach((host, hostId) => {
+  rooms.forEach((r) => {
+    r.hosts.forEach((host, hostId) => {
       if (!seen.has(hostId)) {
         seen.add(hostId);
         list.push({
@@ -77,7 +63,7 @@ function getStreamsList(room: Room) {
         });
       }
     });
-  }
+  });
 
   return list;
 }
